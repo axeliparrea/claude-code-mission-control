@@ -5,13 +5,10 @@
  * Reads JSON from stdin, forwards it to Mission Control via IPC unix socket.
  * Always exits 0 to never block Claude Code.
  *
- * IMPORTANT: Uses createRequire because the parent project may have
- * "type": "module" in package.json, making bare require() unavailable.
+ * Uses .mjs extension to guarantee ESM mode regardless of parent package.json.
  */
 
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const net = require('net');
+import { createConnection } from 'node:net';
 
 const ipcPath = process.env.MC_IPC_PATH;
 if (!ipcPath) process.exit(0);
@@ -22,7 +19,7 @@ process.stdin.on('data', (chunk) => { raw += chunk; });
 process.stdin.on('end', () => {
   try {
     const parsed = JSON.parse(raw);
-    const client = net.createConnection(ipcPath, () => {
+    const client = createConnection(ipcPath, () => {
       client.write(JSON.stringify({
         hookType: process.argv[2] || 'unknown',
         timestamp: Date.now(),
@@ -32,7 +29,7 @@ process.stdin.on('end', () => {
     });
     client.on('error', () => {});
     client.unref();
-  } catch (e) {
+  } catch {
   }
   setTimeout(() => process.exit(0), 1000).unref();
 });

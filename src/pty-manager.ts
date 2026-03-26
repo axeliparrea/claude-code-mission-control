@@ -59,10 +59,15 @@ export interface PtyManager {
  */
 function resolveCommand(): { command: string; args: string[] } {
   const cliArgs = process.argv.slice(2);
-  if (cliArgs.length === 0) {
-    return { command: 'claude', args: [] };
+  const filtered: string[] = [];
+  for (let i = 0; i < cliArgs.length; i++) {
+    if (cliArgs[i] === '--cwd') {
+      i++;
+      continue;
+    }
+    filtered.push(cliArgs[i]!);
   }
-  return { command: 'claude', args: cliArgs };
+  return { command: 'claude', args: filtered };
 }
 
 /**

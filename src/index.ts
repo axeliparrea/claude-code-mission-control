@@ -146,11 +146,25 @@ function buildHeaderContent(
 /**
  * Main entry point — sets up the TUI and starts the render loop.
  */
+/**
+ * Resolves the working directory for Claude Code.
+ * Accepts --cwd flag or defaults to process.cwd().
+ */
+function resolveWorkingDir(): string {
+  const args = process.argv.slice(2);
+  const cwdIndex = args.indexOf('--cwd');
+  const cwdArg = cwdIndex !== -1 ? args[cwdIndex + 1] : undefined;
+  if (cwdArg) {
+    return path.resolve(cwdArg);
+  }
+  return process.cwd();
+}
+
 async function main(): Promise<void> {
   enterAlternateScreen();
   hideCursor();
 
-  const cwd = process.cwd();
+  const cwd = resolveWorkingDir();
   const sessionId = crypto.randomBytes(4).toString('hex');
   const { cols, rows } = termSize();
 
@@ -169,7 +183,7 @@ async function main(): Promise<void> {
     const hookScriptPath = path.resolve(
       path.dirname(new URL(import.meta.url).pathname),
       'hooks',
-      'hook-forward.js',
+      'hook-forward.mjs',
     );
     hookInstaller.install(hookServer.ipcPath, hookScriptPath);
     hookConnected = true;

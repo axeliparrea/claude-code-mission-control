@@ -26,12 +26,13 @@ interface ParserState {
  * Attempts to match a thinking block opening line.
  */
 const THINKING_ENTER_RE =
-  /⚡\s*[Tt]hinking|\bthinking\b.*\.\.\./i;
+  /⚡\s*[Tt]hinking|\bthinking\b.*\.\.\.|\*\s*[Tt]wisting|\*\s*[Tt]hinking/i;
 
 /**
  * Alternative thinking block opening patterns.
+ * Matches Claude Code v2.x "thinking with X effort" format.
  */
-const THINKING_ENTER_ALT_RE = /extended.?thinking/i;
+const THINKING_ENTER_ALT_RE = /extended.?thinking|thinking with \w+ effort/i;
 
 /**
  * Patterns that signal the end of a thinking block.
@@ -46,14 +47,14 @@ const AGENT_DONE_RE =
   /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent/i;
 
 const TOOL_USE_RE =
-  /(?:Tool|Using|Calling):\s*(\S+)|tool_use\b|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b/i;
+  /(?:Tool|Using|Calling):\s*(\S+)|tool_use\b|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|^[LR]\s+\$\s+|●\s*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch|Recalling|Searching)/i;
 
-const TOOL_RESULT_RE = /tool_result|✓\s*\w+\.\w+|✗\s*\w+/i;
+const TOOL_RESULT_RE = /tool_result|✓\s*\w+\.\w+|✗\s*\w+|^Searched for \d+|^Read \d+ |^Wrote \d+ |^Edited \d+ /i;
 
 const FILE_EDIT_RE =
   /(?:Modified|Created|Deleted|Wrote|Write to|Editing|Edited):\s*(.+)/i;
 
-const ERROR_RE = /^Error:|✗|FAIL|panic:|fatal:/i;
+const ERROR_RE = /^Error:|✗|FAIL|panic:|fatal:|hook error$/i;
 
 /**
  * Extracts an agent name from a spawn line using common patterns.
@@ -92,6 +93,20 @@ function extractToolName(line: string): string {
     return toolUseMatch[1].trim();
   }
 
+  if (/^[LR]\s+\$\s+/.test(line)) {
+    return 'Bash';
+  }
+
+  const dotMatch = /●\s*(Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch|Recalling|Searching)/i.exec(line);
+  if (dotMatch?.[1]) {
+    return dotMatch[1].trim();
+  }
+
+  const resultMatch = /^(Searched|Read|Wrote|Edited)\b/i.exec(line);
+  if (resultMatch?.[1]) {
+    return resultMatch[1].trim();
+  }
+
   return 'tool';
 }
 
@@ -122,6 +137,7 @@ function shouldExitThinking(line: string): boolean {
   if (TOOL_OR_AGENT_RE.test(trimmed)) return true;
   if (TOOL_USE_RE.test(trimmed)) return true;
   if (FILE_EDIT_RE.test(trimmed)) return true;
+  if (/^[●>]\s/.test(trimmed)) return true;
   return false;
 }
 

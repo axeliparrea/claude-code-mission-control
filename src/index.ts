@@ -197,11 +197,10 @@ async function main(): Promise<void> {
   let hookConnected = false;
   try {
     await hookServer.start(sessionId);
-    const hookScriptPath = path.resolve(
-      path.dirname(new URL(import.meta.url).pathname),
-      'hooks',
-      'hook-forward.mjs',
-    );
+    const selfDir = path.dirname(new URL(import.meta.url).pathname);
+    const hookInSrc = path.resolve(selfDir, 'hooks', 'hook-forward.mjs');
+    const hookInDist = path.resolve(selfDir, 'hook-forward.mjs');
+    const hookScriptPath = fs.existsSync(hookInSrc) ? hookInSrc : hookInDist;
     hookInstaller.install(hookServer.ipcPath, hookScriptPath);
     hookConnected = true;
   } catch {

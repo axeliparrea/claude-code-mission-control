@@ -4,12 +4,13 @@
   "description": "Terminal multiplexer for Claude Code — real-time visibility into agents, thinking, tools, and file changes",
   "type": "module",
   "bin": {
-    "cmc": "./src/index.ts"
+    "cmc": "./dist/index.js"
   },
   "scripts": {
-    "start": "node --import tsx src/index.ts",
-    "dev": "node --import tsx --watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --target node22",
+    "prebuild": "mkdir -p dist",
+    "build": "tsup src/index.ts --format esm --target node22 --external node-pty --external @xterm/headless --external chokidar && cp src/hooks/hook-forward.mjs dist/hook-forward.mjs",
+    "start": "npm run build && node dist/index.js",
+    "dev": "node --import tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run test/mcp/",

@@ -1,27 +1,32 @@
 #!/usr/bin/env node
 /**
  * Claude Mission Control — terminal multiplexer entry point.
- * Wires the PTY manager, parser, layout engine, and pane renderers into a
- * single real-time TUI that surfaces Claude Code agents, thinking, tools,
+ * Wires PTY, hooks, file watcher, parser, layout, and pane renderers into
+ * a single real-time TUI that surfaces Claude Code agents, thinking, tools,
  * and file changes as live side-panels alongside the main terminal.
  * @module index
  */
 
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { createScreenBuffer } from './screen.js';
 import { createTerminalPane } from './terminal-pane.js';
-import { createTextPane } from './text-pane.js';
+import { createTextPane, TextPane } from './text-pane.js';
+import { TerminalPane } from './terminal-pane.js';
 import { createPtyManager } from './pty-manager.js';
 import { createParser } from './parser.js';
 import { calculateLayout } from './layout.js';
+import { createHookServer } from './hooks/hook-server.js';
+import { createHookInstaller } from './hooks/hook-installer.js';
+import { createFileWatcher } from './watchers/file-watcher.js';
 import { fg, bg, icons } from './theme.js';
 import type { LayoutState, TrackedAgent, ParsedChunk, Rect } from './types.js';
-
-type TextPane = ReturnType<typeof createTextPane>;
-type TerminalPane = ReturnType<typeof createTerminalPane>;
+import type { HookEvent } from './hooks/hook-server.js';
 
 const RENDER_INTERVAL_MS = 33;
 const WINDOWS_RESIZE_POLL_MS = 500;
 const MAX_VISIBLE_AGENT_PANES = 2;
+const DOUBLE_CTRLC_MS = 500;
 
 /**
  * Emits the ANSI escape sequence to enter the alternate screen buffer.
@@ -80,9 +85,21 @@ function formatToolCall(chunk: ParsedChunk): string {
  */
 function formatFileChange(chunk: ParsedChunk): string {
   const opLabel = chunk.fileOp === 'A' ? fg.success + '+' : chunk.fileOp === 'D' ? fg.error + '-' : fg.main + 'M';
-  const path = chunk.filePath ?? '';
+  const filePath = chunk.filePath ?? '';
   const reset = '\x1b[0m';
-  return `${opLabel}${reset} ${path}`;
+  return `${opLabel}${reset} ${filePath}`;
+}
+
+/**
+ * Formats a hook event tool into a displayable string for the MCP pane.
+ */
+function formatHookTool(event: HookEvent): string {
+  const icon = event.type === 'tool_end'
+    ? (event.toolSuccess !== false ? icons.success : icons.error)
+    : icons.pending;
+  const name = event.toolName ?? 'tool';
+  const server = event.serverName ? ` (${event.serverName})` : '';
+  return `${icon} ${name}${server}`;
 }
 
 /**
@@ -107,14 +124,23 @@ function findEvictableAgent(agents: Map<string, TrackedAgent>): string | null {
 /**
  * Builds the header bar content string.
  */
-function buildHeaderContent(agentCount: number, toolCount: number): string {
+function buildHeaderContent(
+  agentCount: number,
+  toolCount: number,
+  fileCount: number,
+  hookConnected: boolean,
+): string {
   const dot = fg.error + icons.dot + '\x1b[0m';
   const greenDot = fg.success + icons.dot + '\x1b[0m';
   const title = fg.textPrimary + ' Claude Mission Control\x1b[0m';
   const agentsBadge = ` ${greenDot} ${fg.textSecondary}${agentCount} agents\x1b[0m`;
   const toolsBadge = ` ${fg.textDim}${toolCount} tools\x1b[0m`;
-  const keybinds = ` ${fg.textDim}tab=focus  q=quit\x1b[0m`;
-  return ` ${dot}${title} │${agentsBadge} │${toolsBadge} │${keybinds}`;
+  const filesBadge = ` ${fg.textDim}${fileCount} files\x1b[0m`;
+  const hookBadge = hookConnected
+    ? ` ${fg.success}hooks${'\x1b[0m'}`
+    : ` ${fg.textDim}hooks:off${'\x1b[0m'}`;
+  const keybinds = ` ${fg.textDim}esc=panels  q=quit\x1b[0m`;
+  return ` ${dot}${title} │${agentsBadge} │${toolsBadge} │${filesBadge} │${hookBadge} │${keybinds}`;
 }
 
 /**
@@ -124,11 +150,32 @@ async function main(): Promise<void> {
   enterAlternateScreen();
   hideCursor();
 
+  const cwd = process.cwd();
+  const sessionId = crypto.randomBytes(4).toString('hex');
   const { cols, rows } = termSize();
 
   const screen = createScreenBuffer(cols, rows);
   const ptyManager = createPtyManager();
   const parser = createParser();
+  const hookServer = createHookServer();
+  const hookInstaller = createHookInstaller(cwd);
+  const fileWatcher = createFileWatcher();
+
+  hookInstaller.recoverFromCrash();
+
+  let hookConnected = false;
+  try {
+    await hookServer.start(sessionId);
+    const hookScriptPath = path.resolve(
+      path.dirname(new URL(import.meta.url).pathname),
+      'hooks',
+      'hook-forward.js',
+    );
+    hookInstaller.install(hookServer.ipcPath, hookScriptPath);
+    hookConnected = true;
+  } catch {
+    hookConnected = false;
+  }
 
   let layoutState: LayoutState = 'solo';
   let layout = calculateLayout(cols, rows, layoutState, 0);
@@ -145,6 +192,7 @@ async function main(): Promise<void> {
     'Thinking',
     layout.thinking,
     fg.thinking,
+    200,
   );
 
   const mcpPane: TextPane = createTextPane(
@@ -152,6 +200,7 @@ async function main(): Promise<void> {
     'Tools',
     layout.mcp,
     fg.mcp,
+    300,
   );
 
   const filesPane: TextPane = createTextPane(
@@ -159,18 +208,21 @@ async function main(): Promise<void> {
     'Files',
     layout.files,
     fg.files,
+    50,
   );
 
   const agents = new Map<string, TrackedAgent>();
   const agentPanes = new Map<string, TextPane>();
   const agentSlotOrder: string[] = [];
 
+  let panelMode = false;
   let focusedPaneIndex = 0;
-  let inputBuffer = '';
-  let inputMode = false;
   let toolCount = 0;
+  let fileCount = 0;
+  let lastCtrlCTime = 0;
   let renderIntervalId: ReturnType<typeof setInterval> | null = null;
   let windowsPollId: ReturnType<typeof setInterval> | null = null;
+  let hookAgentCounter = 0;
 
   /**
    * Returns the ordered list of focusable panes (main + agents + thinking).
@@ -191,7 +243,7 @@ async function main(): Promise<void> {
   function applyFocus(): void {
     const panes = focusablePanes();
     panes.forEach((pane, index) => {
-      pane.focused = index === focusedPaneIndex;
+      pane.focused = panelMode && index === focusedPaneIndex;
     });
   }
 
@@ -254,7 +306,7 @@ async function main(): Promise<void> {
     const slotIndex = agentSlotOrder.indexOf(agentId);
     const rect: Rect = layout.agents[slotIndex] ?? { left: 0, top: 0, width: 0, height: 0 };
 
-    const pane = createTextPane(agentId, agentName, rect, fg.agent);
+    const pane = createTextPane(agentId, agentName, rect, fg.agent, 500);
     agentPanes.set(agentId, pane);
     applyFocus();
   }
@@ -298,6 +350,7 @@ async function main(): Promise<void> {
     }
 
     if (chunk.type === 'file') {
+      fileCount += 1;
       filesPane.appendLine(formatFileChange(chunk));
       return;
     }
@@ -309,13 +362,55 @@ async function main(): Promise<void> {
   }
 
   /**
+   * Routes a hook event to the appropriate pane.
+   */
+  function routeHookEvent(event: HookEvent): void {
+    if (event.type === 'tool_start' || event.type === 'tool_end') {
+      toolCount += 1;
+      mcpPane.appendLine(formatHookTool(event));
+      return;
+    }
+
+    if (event.type === 'agent_spawn') {
+      hookAgentCounter += 1;
+      const agentId = `hook-agent-${hookAgentCounter}`;
+      const agentName = event.agentType ?? event.toolName ?? 'Agent';
+      registerAgent(agentId, agentName);
+      if (event.agentPrompt) {
+        agentPanes.get(agentId)?.appendLine(
+          `${fg.textDim}${icons.arrow} ${event.agentPrompt.slice(0, 120)}\x1b[0m`
+        );
+      }
+      return;
+    }
+
+    if (event.type === 'agent_done') {
+      const lastAgentId = agentSlotOrder[agentSlotOrder.length - 1];
+      if (lastAgentId) {
+        const existingAgent = agents.get(lastAgentId);
+        if (existingAgent) {
+          existingAgent.status = 'done';
+          const pane = agentPanes.get(lastAgentId);
+          if (pane) {
+            pane.borderColor = fg.textDim;
+            if (event.agentOutput) {
+              pane.appendLine(`${fg.success}${icons.success} done\x1b[0m`);
+            }
+          }
+        }
+      }
+      return;
+    }
+  }
+
+  /**
    * Renders one complete frame into the screen buffer and flushes it.
    */
   function renderFrame(): void {
     const { cols: c, rows: r } = termSize();
     screen.clear();
 
-    const headerContent = buildHeaderContent(agents.size, toolCount);
+    const headerContent = buildHeaderContent(agents.size, toolCount, fileCount, hookConnected);
     screen.writeAnsiString(0, 0, c, bg.headerBg + headerContent + '\x1b[0m');
 
     mainPane.renderTo(screen);
@@ -329,84 +424,74 @@ async function main(): Promise<void> {
 
     const inputRow = r - 1;
     const leftWidth = layout.input.width;
-    const prompt = inputMode
-      ? `${fg.main}>${fg.textSecondary} ${inputBuffer}█\x1b[0m`
-      : `${fg.textDim}> ${inputBuffer}\x1b[0m`;
-    screen.writeAnsiString(inputRow, 0, leftWidth, prompt);
+    if (panelMode) {
+      const hint = `${fg.main}[PANEL MODE]${fg.textDim} ↑↓=scroll tab=next esc=back\x1b[0m`;
+      screen.writeAnsiString(inputRow, 0, leftWidth, hint);
+    } else {
+      const prompt = `${fg.textDim}${icons.dot} passthrough\x1b[0m`;
+      screen.writeAnsiString(inputRow, 0, leftWidth, prompt);
+    }
 
     screen.flush(process.stdout);
   }
 
   /**
    * Processes raw keyboard input from stdin.
+   * Default mode: passthrough to PTY (real terminal experience).
+   * Panel mode: navigate and scroll panes.
    */
   function handleKeyInput(data: Buffer): void {
     const key = data.toString('utf8');
 
     if (key === '\x03') {
-      cleanup();
-      process.exit(0);
+      const now = Date.now();
+      if (now - lastCtrlCTime < DOUBLE_CTRLC_MS) {
+        cleanup();
+        process.exit(0);
+      }
+      lastCtrlCTime = now;
+      ptyManager.write(key);
+      return;
     }
 
-    if (key === 'q' && !inputMode) {
-      cleanup();
-      process.exit(0);
-    }
-
-    if (key === '\t') {
-      const panes = focusablePanes();
-      focusedPaneIndex = (focusedPaneIndex + 1) % panes.length;
+    if (key === '\x1b' && data.length === 1) {
+      panelMode = !panelMode;
+      if (panelMode) {
+        focusedPaneIndex = 0;
+      }
       applyFocus();
       return;
     }
 
-    if (key === '\x1b') {
-      focusedPaneIndex = 0;
-      applyFocus();
-      inputMode = !inputMode;
-      return;
-    }
-
-    if (key === '\r') {
-      if (inputMode) {
-        ptyManager.write(inputBuffer + '\r');
-        inputBuffer = '';
-      } else {
-        ptyManager.write('\r');
+    if (panelMode) {
+      if (key === 'q') {
+        cleanup();
+        process.exit(0);
       }
-      return;
-    }
 
-    if (key === '\x7f') {
-      if (inputMode && inputBuffer.length > 0) {
-        inputBuffer = inputBuffer.slice(0, -1);
+      if (key === '\t') {
+        const panes = focusablePanes();
+        focusedPaneIndex = (focusedPaneIndex + 1) % panes.length;
+        applyFocus();
+        return;
       }
-      return;
-    }
 
-    if (key === '\x1b[A') {
-      if (!inputMode) {
+      if (key === '\x1b[A') {
         const panes = focusablePanes();
         panes[focusedPaneIndex]?.scrollUp?.();
+        return;
       }
-      return;
-    }
 
-    if (key === '\x1b[B') {
-      if (!inputMode) {
+      if (key === '\x1b[B') {
         const panes = focusablePanes();
         panes[focusedPaneIndex]?.scrollDown?.();
+        return;
       }
+
       return;
     }
 
-    if (inputMode) {
-      if (key.length === 1 && key.charCodeAt(0) >= 32) {
-        inputBuffer += key;
-      }
-    } else {
-      ptyManager.write(key);
-    }
+    ptyManager.write(key);
   }
 
   /**
@@ -416,6 +501,9 @@ async function main(): Promise<void> {
     if (renderIntervalId !== null) clearInterval(renderIntervalId);
     if (windowsPollId !== null) clearInterval(windowsPollId);
 
+    try { hookInstaller.uninstall(); } catch { }
+    try { hookServer.stop(); } catch { }
+    try { fileWatcher.stop(); } catch { }
     try { ptyManager.kill(); } catch { }
 
     if (process.stdin.isTTY) {
@@ -440,11 +528,9 @@ async function main(): Promise<void> {
 
   process.stdout.on('resize', () => {
     recalculateLayout();
-    const { cols: c, rows: r } = termSize();
     const contentCols = Math.max(1, layout.main.width - 2);
     const contentRows = Math.max(1, layout.main.height - 2);
     ptyManager.resize(contentCols, contentRows);
-    screen.resize(c, r);
   });
 
   if (process.platform === 'win32') {
@@ -459,10 +545,25 @@ async function main(): Promise<void> {
         const contentCols = Math.max(1, layout.main.width - 2);
         const contentRows = Math.max(1, layout.main.height - 2);
         ptyManager.resize(contentCols, contentRows);
-        screen.resize(c, r);
       }
     }, WINDOWS_RESIZE_POLL_MS);
   }
+
+  hookServer.onEvent((event: HookEvent) => {
+    routeHookEvent(event);
+  });
+
+  fileWatcher.onChange((event) => {
+    fileCount += 1;
+    const opLabel = event.changeType === 'A'
+      ? fg.success + '+'
+      : event.changeType === 'D'
+      ? fg.error + '-'
+      : fg.main + 'M';
+    filesPane.appendLine(`${opLabel}\x1b[0m ${event.filePath}`);
+  });
+
+  fileWatcher.start(cwd);
 
   ptyManager.onData((data: string) => {
     mainPane.write(data);

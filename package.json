@@ -13,6 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run test/mcp/",
+    "test:e2e": "node --import tsx test/e2e-headless.ts",
+    "test:smoke": "node --import tsx test/smoke-test.ts",
+    "test:all": "npm test && node --import tsx test/smoke-test.ts && node --import tsx test/e2e-headless.ts",
     "sandbox": "bash test/sandbox/run.sh",
     "typecheck": "tsc --noEmit"
   },

@@ -48,48 +48,42 @@ describe('createParser', () => {
     expect(chunks[2]?.clean).toBe('line three');
   });
 
-  // --- Thinking mode ---
+  // --- Thinking detection (line-by-line, not stateful) ---
 
-  it('classifies "⚡ Thinking..." as type thinking', () => {
-    const chunks = parser.feed('⚡ Thinking...\n');
+  it('classifies "* Thinking..." as type thinking', () => {
+    const chunks = parser.feed('* Thinking...\n');
     expect(chunks[0]?.type).toBe('thinking');
   });
 
-  it('classifies "⚡ thinking..." lowercase as type thinking', () => {
-    const chunks = parser.feed('⚡ thinking...\n');
+  it('classifies "· Bootstrapping... (thinking with medium effort)" as thinking', () => {
+    const chunks = parser.feed('· Bootstrapping... (thinking with medium effort)\n');
     expect(chunks[0]?.type).toBe('thinking');
   });
 
-  it('activates thinking mode so subsequent lines are also thinking', () => {
-    parser.feed('⚡ Thinking...\n');
-    const chunks = parser.feed('deep analysis here\n');
+  it('classifies "* Cogitated for 41s" as thinking', () => {
+    const chunks = parser.feed('* Cogitated for 41s\n');
     expect(chunks[0]?.type).toBe('thinking');
   });
 
-  it('maintains thinking mode across multiple subsequent lines', () => {
-    parser.feed('⚡ Thinking...\n');
-    const first = parser.feed('step one\n');
-    const second = parser.feed('step two\n');
-    expect(first[0]?.type).toBe('thinking');
-    expect(second[0]?.type).toBe('thinking');
-  });
-
-  it('exits thinking mode when a tool use line is encountered', () => {
-    parser.feed('⚡ Thinking...\n');
-    parser.feed('some thinking\n');
-    const chunks = parser.feed('Tool: Read\n');
-    expect(chunks[0]?.type).toBe('mcp');
-  });
-
-  it('exits thinking mode when an agent spawn line is encountered', () => {
-    parser.feed('⚡ Thinking...\n');
-    const chunks = parser.feed('Spawned agent sub-agent-1\n');
-    expect(chunks[0]?.type).toBe('agent');
-  });
-
-  it('classifies "extended thinking" as thinking via alt pattern', () => {
-    const chunks = parser.feed('extended thinking mode activated\n');
+  it('classifies "* Twisting... (thinking with medium effort)" as thinking', () => {
+    const chunks = parser.feed('* Twisting... (thinking with medium effort)\n');
     expect(chunks[0]?.type).toBe('thinking');
+  });
+
+  it('does NOT classify status bar lines as thinking', () => {
+    const chunks = parser.feed('>> bypasspermissionson (shift+tabtocycle)\n');
+    expect(chunks[0]?.type).toBe('main');
+  });
+
+  it('does NOT classify context/usage bar as thinking', () => {
+    const chunks = parser.feed('Context  19% |Usage  35% (resets in 2h 35m)\n');
+    expect(chunks[0]?.type).toBe('main');
+  });
+
+  it('subsequent non-thinking lines are classified as main (no stateful mode)', () => {
+    parser.feed('* Thinking...\n');
+    const chunks = parser.feed('Here is my analysis of the problem.\n');
+    expect(chunks[0]?.type).toBe('main');
   });
 
   // --- Agent tracking ---
@@ -291,9 +285,8 @@ describe('createParser', () => {
   it('separate parser instances have independent state', () => {
     const parser1 = createParser();
     const parser2 = createParser();
-    parser1.feed('⚡ Thinking...\n');
-    parser1.feed('thinking content\n');
-    const chunks2 = parser2.feed('thinking content\n');
+    parser1.feed('Spawned agent sub-agent-1\n');
+    const chunks2 = parser2.feed('some random content\n');
     // parser2 never saw thinking trigger, should be 'main'
     expect(chunks2[0]?.type).toBe('main');
   });

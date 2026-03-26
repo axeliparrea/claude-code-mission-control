@@ -141,7 +141,7 @@ describe('Full pipeline integration', { timeout: 15000 }, () => {
   it('parser classifies PTY output into correct chunk types', () => {
     const parser = createParser();
 
-    const thinking = parser.feed('⚡ Thinking...\nLet me analyze this.\n');
+    const thinking = parser.feed('* Bootstrapping... (thinking with medium effort)\n* Cogitated for 5s\n');
     expect(thinking).toHaveLength(2);
     expect(thinking[0]!.type).toBe('thinking');
     expect(thinking[1]!.type).toBe('thinking');

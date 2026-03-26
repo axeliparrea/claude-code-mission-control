@@ -147,7 +147,7 @@ function buildHeaderContent(
   const hookBadge = hookConnected
     ? ` ${fg.success}hooks${'\x1b[0m'}`
     : ` ${fg.textDim}hooks:off${'\x1b[0m'}`;
-  const keybinds = ` ${fg.textDim}esc=panels  q=quit\x1b[0m`;
+  const keybinds = ` ${fg.textDim}esc=panels 1-5=tabs q=quit\x1b[0m`;
   return ` ${dot}${title} │${agentsBadge} │${toolsBadge} │${filesBadge} │${hookBadge} │${keybinds}`;
 }
 

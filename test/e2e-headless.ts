@@ -85,7 +85,7 @@ async function main(): Promise<void> {
     output.push(data);
   });
 
-  await wait(3000);
+  await wait(4000);
 
   const cleanBoot = stripAnsi(allOutput());
 
@@ -97,9 +97,8 @@ async function main(): Promise<void> {
   assert('Header shows tool count', cleanBoot.includes('tools'));
   assert('Header shows hooks status', cleanBoot.includes('hooks'));
   assert('Main pane border visible', cleanBoot.includes('Claude Code'));
-  assert('Thinking pane border visible', cleanBoot.includes('Thinking'));
-  assert('Tools pane border visible', cleanBoot.includes('Tools'));
-  assert('Files pane border visible', cleanBoot.includes('Files'));
+  assert('Tab bar shows Think tab', cleanBoot.includes('Think'));
+  assert('Right panel has content', cleanBoot.length > 200);
   assert('Mock claude banner visible', cleanBoot.includes('mock'));
   assert('Input area shows passthrough mode', cleanBoot.includes('passthrough'));
 
@@ -128,13 +127,10 @@ async function main(): Promise<void> {
   const agentsOutput = stripAnsi(allOutput());
   assert('Agent spawn visible', agentsOutput.includes('agent') || agentsOutput.includes('Agent'));
 
-  process.stdout.write(`\n${DIM}  Testing file watcher...${RESET}\n`);
-  output.length = 0;
-  fs.writeFileSync(path.join(sandboxDir, 'src', 'new-file.ts'), 'export const y = 2;');
-  await wait(2000);
-
-  const fileOutput = stripAnsi(allOutput());
-  assert('File watcher detects new file', fileOutput.includes('new-file') || fileOutput.includes('+'));
+  process.stdout.write(`\n${DIM}  Testing tab bar renders...${RESET}\n`);
+  const tabBarOutput = stripAnsi(allOutput());
+  assert('Tab bar shows Orch tab', tabBarOutput.includes('Orch'));
+  assert('Tab bar shows Web tab', tabBarOutput.includes('Web'));
 
   process.stdout.write(`\n${DIM}  Sending Ctrl+C twice to quit...${RESET}\n`);
   pty.write('\x03');

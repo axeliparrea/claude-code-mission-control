@@ -19,9 +19,14 @@ import { calculateLayout } from './layout.js';
 import { createHookServer } from './hooks/hook-server.js';
 import { createHookInstaller } from './hooks/hook-installer.js';
 import { createFileWatcher } from './watchers/file-watcher.js';
+import { createOrchestrator } from './orchestrator.js';
+import { createWebViewer } from './web-viewer.js';
 import { fg, bg, icons } from './theme.js';
 import type { LayoutState, TrackedAgent, ParsedChunk, Rect } from './types.js';
 import type { HookEvent } from './hooks/hook-server.js';
+
+const TAB_NAMES = ['Think', 'Tools', 'Files', 'Orch', 'Web'] as const;
+type TabName = typeof TAB_NAMES[number];
 
 const RENDER_INTERVAL_MS = 33;
 const WINDOWS_RESIZE_POLL_MS = 500;
@@ -225,6 +230,28 @@ async function main(): Promise<void> {
     50,
   );
 
+  const orchestratorPane: TextPane = createTextPane(
+    'orchestrator',
+    'Orchestrator',
+    layout.rightTab,
+    fg.agent,
+    500,
+  );
+
+  const browserPane: TextPane = createTextPane(
+    'browser',
+    'Browser',
+    layout.rightTab,
+    fg.main,
+    1000,
+  );
+
+  const orchestrator = createOrchestrator();
+  const webViewer = createWebViewer();
+
+  let activeTab: number = 0;
+  const tabPanes: TextPane[] = [thinkingPane, mcpPane, filesPane, orchestratorPane, browserPane];
+
   const agents = new Map<string, TrackedAgent>();
   const agentPanes = new Map<string, TextPane>();
   const agentSlotOrder: string[] = [];
@@ -272,9 +299,11 @@ async function main(): Promise<void> {
     layout = calculateLayout(c, r, layoutState, agentSlotOrder.length);
 
     mainPane.resize(layout.main);
-    thinkingPane.rect = layout.thinking;
-    mcpPane.rect = layout.mcp;
-    filesPane.rect = layout.files;
+    thinkingPane.rect = layout.rightTab;
+    mcpPane.rect = layout.rightTab;
+    filesPane.rect = layout.rightTab;
+    orchestratorPane.rect = layout.rightTab;
+    browserPane.rect = layout.rightTab;
 
     layout.agents.forEach((rect, index) => {
       const agentId = agentSlotOrder[index];
@@ -379,6 +408,8 @@ async function main(): Promise<void> {
    * Routes a hook event to the appropriate pane.
    */
   function routeHookEvent(event: HookEvent): void {
+    orchestrator.handleEvent(event);
+
     if (event.type === 'tool_start' || event.type === 'tool_end') {
       toolCount += 1;
       mcpPane.appendLine(formatHookTool(event));
@@ -428,18 +459,51 @@ async function main(): Promise<void> {
     screen.writeAnsiString(0, 0, c, bg.headerBg + headerContent + '\x1b[0m');
 
     mainPane.renderTo(screen);
-    thinkingPane.renderTo(screen);
-    mcpPane.renderTo(screen);
-    filesPane.renderTo(screen);
 
     for (const id of agentSlotOrder) {
       agentPanes.get(id)?.renderTo(screen);
     }
 
+    if (activeTab === 3) {
+      orchestratorPane.clear();
+      for (const line of orchestrator.render()) {
+        orchestratorPane.appendLine(line);
+      }
+    }
+
+    if (activeTab === 4) {
+      browserPane.clear();
+      for (const line of webViewer.getLines()) {
+        browserPane.appendLine(line);
+      }
+    }
+
+    const tabBarRow = layout.tabBar.top;
+    const tabBarLeft = layout.tabBar.left;
+    const tabBarWidth = layout.tabBar.width;
+    if (tabBarWidth > 0) {
+      let tabStr = '';
+      for (let i = 0; i < TAB_NAMES.length; i++) {
+        const label = `${i + 1}:${TAB_NAMES[i]}`;
+        if (i === activeTab) {
+          tabStr += `${fg.main}\x1b[1m ${label} \x1b[0m`;
+        } else {
+          tabStr += `${fg.textDim} ${label} \x1b[0m`;
+        }
+        if (i < TAB_NAMES.length - 1) tabStr += `${fg.textDim}|`;
+      }
+      screen.writeAnsiString(tabBarRow, tabBarLeft, tabBarWidth, bg.headerBg + tabStr + '\x1b[0m');
+    }
+
+    const activePane = tabPanes[activeTab];
+    if (activePane) {
+      activePane.renderTo(screen);
+    }
+
     const inputRow = r - 1;
     const leftWidth = layout.input.width;
     if (panelMode) {
-      const hint = `${fg.main}[PANEL MODE]${fg.textDim} ↑↓=scroll tab=next esc=back\x1b[0m`;
+      const hint = `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane 1-5=tab esc=back\x1b[0m`;
       screen.writeAnsiString(inputRow, 0, leftWidth, hint);
     } else {
       const prompt = `${fg.textDim}${icons.dot} passthrough\x1b[0m`;
@@ -478,6 +542,11 @@ async function main(): Promise<void> {
     }
 
     if (panelMode) {
+      if (key >= '1' && key <= '5') {
+        activeTab = parseInt(key) - 1;
+        return;
+      }
+
       if (key === 'q') {
         cleanup();
         process.exit(0);

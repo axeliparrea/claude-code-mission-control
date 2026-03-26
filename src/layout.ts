@@ -36,6 +36,10 @@ export interface LayoutResult {
   agents: Rect[];
   /** Single-row input bar at the bottom of the left column. */
   input: Rect;
+  /** Full right column rect for tabbed single-pane mode (row 2 to bottom). */
+  rightTab: Rect;
+  /** Tab bar row at the top of the right column. */
+  tabBar: Rect;
 }
 
 /**
@@ -134,6 +138,8 @@ export function calculateLayout(
       files: zeroRect(),
       agents: [],
       input,
+      rightTab: zeroRect(),
+      tabBar: zeroRect(),
     };
   }
 
@@ -143,6 +149,9 @@ export function calculateLayout(
   const rightHeight = rows - 1;
 
   const [thinking, mcp, files] = splitRightColumn(leftWidth, rightTop, rightWidth, rightHeight);
+
+  const tabBar: Rect = { left: leftWidth, top: 1, width: rightWidth, height: 1 };
+  const rightTab: Rect = { left: leftWidth, top: 2, width: rightWidth, height: rows - 2 };
 
   const input: Rect = {
     left: 0,
@@ -163,7 +172,7 @@ export function calculateLayout(
       height: leftContentHeight,
     };
 
-    return { header, main, thinking, mcp, files, agents: [], input };
+    return { header, main, thinking, mcp, files, agents: [], input, rightTab, tabBar };
   }
 
   if (state === 'single' || agentCount === 1) {
@@ -184,7 +193,7 @@ export function calculateLayout(
       height: agentHeight,
     };
 
-    return { header, main, thinking, mcp, files, agents: [agent1], input };
+    return { header, main, thinking, mcp, files, agents: [agent1], input, rightTab, tabBar };
   }
 
   const mainHeight = Math.max(1, Math.floor(leftContentHeight * 0.45));
@@ -213,5 +222,5 @@ export function calculateLayout(
     height: agentAreaHeight,
   };
 
-  return { header, main, thinking, mcp, files, agents: [agent1, agent2], input };
+  return { header, main, thinking, mcp, files, agents: [agent1, agent2], input, rightTab, tabBar };
 }

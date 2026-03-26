@@ -54,6 +54,7 @@ export class TerminalPane implements PaneBase {
   focused: boolean;
 
   private terminal: TerminalType;
+  private _userScrolled = false;
 
   /**
    * Creates a new TerminalPane.
@@ -82,6 +83,9 @@ export class TerminalPane implements PaneBase {
    */
   write(data: string): void {
     this.terminal.write(data);
+    if (!this._userScrolled) {
+      this.terminal.scrollToBottom();
+    }
   }
 
   /**
@@ -99,6 +103,7 @@ export class TerminalPane implements PaneBase {
    * Scrolls the terminal viewport up by one line.
    */
   scrollUp(): void {
+    this._userScrolled = true;
     this.terminal.scrollLines(-1);
   }
 
@@ -107,6 +112,11 @@ export class TerminalPane implements PaneBase {
    */
   scrollDown(): void {
     this.terminal.scrollLines(1);
+    const buf = this.terminal.buffer.active;
+    const maxViewport = buf.length - this.terminal.rows;
+    if (buf.viewportY >= maxViewport) {
+      this._userScrolled = false;
+    }
   }
 
   /**

@@ -166,17 +166,12 @@ function resolveWorkingDir(): string {
     return path.resolve(cwdArg);
   }
 
-  const currentDir = process.cwd();
-  const mcPackageJson = path.join(currentDir, 'package.json');
-  try {
-    const pkg = JSON.parse(fs.readFileSync(mcPackageJson, 'utf8'));
-    if (pkg.name === 'claude-mission-control') {
-      const home = process.env['HOME'] ?? process.env['USERPROFILE'] ?? currentDir;
-      return home;
-    }
-  } catch { }
+  const firstArg = args.find((a) => !a.startsWith('-'));
+  if (firstArg && fs.existsSync(firstArg)) {
+    return path.resolve(firstArg);
+  }
 
-  return currentDir;
+  return process.cwd();
 }
 
 async function main(): Promise<void> {
@@ -668,7 +663,10 @@ async function main(): Promise<void> {
     filesPane.appendLine(`${opLabel}\x1b[0m ${event.filePath}`);
   });
 
-  fileWatcher.start(cwd);
+  try {
+    fileWatcher.start(cwd);
+  } catch {
+  }
 
   ptyManager.onData((data: string) => {
     mainPane.write(data);

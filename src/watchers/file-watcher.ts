@@ -120,11 +120,13 @@ export function createFileWatcher(): FileWatcher {
         ignored: (p: string) => isIgnoredPath(path.relative(cwd, p)),
         ignoreInitial: true,
         persistent: true,
+        depth: 5,
       });
 
       watcher.on('add', (p: string) => { handleChokidarEvent('add', p); });
       watcher.on('change', (p: string) => { handleChokidarEvent('change', p); });
       watcher.on('unlink', (p: string) => { handleChokidarEvent('unlink', p); });
+      watcher.on('error', () => {});
     },
 
     async stop(): Promise<void> {

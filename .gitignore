@@ -1,5 +1,5 @@
 node_modules/
 dist/
 *.tsbuildinfo
-.claude/settings.local.json.mc-backup
+.claude/
 /tmp/

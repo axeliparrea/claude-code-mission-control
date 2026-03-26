@@ -12,6 +12,8 @@
     "build": "tsup src/index.ts --format esm --target node22",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run test/mcp/",
+    "sandbox": "bash test/sandbox/run.sh",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

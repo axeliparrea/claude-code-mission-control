@@ -48,13 +48,19 @@ export interface FileWatcher {
   onChange(callback: FileChangeCallback): void;
 }
 
-const IGNORED_PATTERNS = [
-  '**/node_modules/**',
-  '**/.git/**',
-  '**/dist/**',
-  '**/*.lock',
-  '**/.DS_Store',
-];
+/**
+ * Returns true if a file path should be ignored by the watcher.
+ * Uses segment-based matching since chokidar v4 does not support glob strings.
+ */
+function isIgnoredPath(filePath: string): boolean {
+  const segments = filePath.split(path.sep);
+  if (segments.includes('node_modules')) return true;
+  if (segments.includes('.git')) return true;
+  if (segments.includes('dist')) return true;
+  if (filePath.endsWith('.lock')) return true;
+  if (segments.includes('.DS_Store')) return true;
+  return false;
+}
 
 const DEDUP_WINDOW_MS = 500;
 
@@ -111,7 +117,7 @@ export function createFileWatcher(): FileWatcher {
     start(cwd: string): void {
       watchedCwd = cwd;
       watcher = watch(cwd, {
-        ignored: IGNORED_PATTERNS,
+        ignored: (p: string) => isIgnoredPath(path.relative(cwd, p)),
         ignoreInitial: true,
         persistent: true,
       });

@@ -221,7 +221,7 @@ async function main(): Promise<void> {
   const thinkingPane: TextPane = createTextPane(
     'thinking',
     'Thinking',
-    layout.thinking,
+    layout.rightTab,
     fg.thinking,
     200,
   );
@@ -229,7 +229,7 @@ async function main(): Promise<void> {
   const mcpPane: TextPane = createTextPane(
     'mcp',
     'Tools',
-    layout.mcp,
+    layout.rightTab,
     fg.mcp,
     300,
   );
@@ -237,7 +237,7 @@ async function main(): Promise<void> {
   const filesPane: TextPane = createTextPane(
     'files',
     'Files',
-    layout.files,
+    layout.rightTab,
     fg.files,
     50,
   );
@@ -373,7 +373,20 @@ async function main(): Promise<void> {
     sessionCollector.recordChunk(chunk);
 
     if (chunk.type === 'thinking') {
-      thinkingPane.appendLine(chunk.clean);
+      const effortMatch = /\(thinking with (\w+) effort\)/i.exec(chunk.clean);
+      const verbMatch = /^\s*[*·•]\s*(\w+)/i.exec(chunk.clean);
+      const durationMatch = /cogitated for (\d+s?)/i.exec(chunk.clean);
+
+      if (durationMatch) {
+        thinkingPane.appendLine(`${fg.success}${icons.success} Done${fg.textDim} (${durationMatch[1]})\x1b[0m`);
+      } else if (verbMatch) {
+        const verb = verbMatch[1] ?? 'Thinking';
+        const effort = effortMatch ? ` ${fg.textDim}[${effortMatch[1]}]\x1b[0m` : '';
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        thinkingPane.appendLine(`${fg.thinking}${icons.pending} ${verb}...${effort} ${fg.textDim}${time}\x1b[0m`);
+      } else {
+        thinkingPane.appendLine(`${fg.thinking}${chunk.clean}\x1b[0m`);
+      }
       return;
     }
 
@@ -699,6 +712,7 @@ async function main(): Promise<void> {
   const contentRows = Math.max(1, layout.main.height - 2);
   ptyManager.spawn(contentCols, contentRows, cwd);
 
+  renderFrame();
   renderIntervalId = setInterval(renderFrame, RENDER_INTERVAL_MS);
 }
 

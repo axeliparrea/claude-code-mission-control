@@ -16,17 +16,16 @@ interface ParserState {
 
 /**
  * Thinking line patterns — each line is matched independently (NOT stateful).
- * Claude Code v2.x uses: "* Thinking...", "* Bootstrapping... (thinking with X effort)",
- * "* Cogitated for Ns", "⚡ Thinking", "· Thinking..."
+ * Claude Code v2.x uses: "* Thinking...", "· Bootstrapping... (thinking with X effort)",
+ * "* Cogitated for Ns". Lines MUST start with a bullet marker.
+ *
+ * CRITICAL: We only match lines that start with [*·] followed by a known
+ * thinking verb. The "thinking with X effort" part is NOT matched independently
+ * because Claude Code redraws this text via cursor positioning, creating
+ * corrupted partial lines in the PTY stream.
  */
 const THINKING_LINE_RE =
-  /^\s*[*·]\s*(thinking|twisting|bootstrapping|cogitat)/i;
-
-const THINKING_EFFORT_RE =
-  /thinking with \w+ effort/i;
-
-const THINKING_DURATION_RE =
-  /cogitated for \d+/i;
+  /^\s*[*·•]\s*(thinking|twisting|bootstrapping|cogitat|herding|mustering|pondering|ruminating|deliberat)/i;
 
 const AGENT_SPAWN_RE =
   /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)/i;
@@ -54,7 +53,7 @@ const ERROR_RE =
  * Status bar, permission prompts, context indicators, etc.
  */
 const UI_CHROME_RE =
-  /^\s*>>|bypasspermission|shift\+tab|Context\s+\d+%|Usage\s+\d+%|resets?\s+in\s+\d+|^\s*\[Sonnet|^\s*\[Opus|^\s*\[Haiku|^\s*\[Claude|ctrl\+o to expand|\(shift\+tab/i;
+  /^\s*>>|bypasspermission|shift\+tab|Context\s+\d+%|Usage\s+\d+%|resets?\s+in\s+\d+|^\s*\[Sonnet|^\s*\[Opus|^\s*\[Haiku|^\s*\[Claude|ctrl\+o to expand|\(shift\+tab|thinkingwith\w*medium|thinkingwith\w*effort/i;
 
 function extractAgentName(line: string): string {
   const runningMatch = /Running agent:\s*(.+)/i.exec(line);
@@ -114,7 +113,7 @@ function classifyLine(line: string, state: ParserState): ParsedChunk {
     return { type: 'main', text: line, clean };
   }
 
-  if (THINKING_LINE_RE.test(clean) || THINKING_EFFORT_RE.test(clean) || THINKING_DURATION_RE.test(clean)) {
+  if (THINKING_LINE_RE.test(clean)) {
     return { type: 'thinking', text: line, clean };
   }
 

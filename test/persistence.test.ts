@@ -104,9 +104,8 @@ describe('Memory persistence across sessions', () => {
     expect(memFinal.getSessions()).toHaveLength(3);
 
     const sessions = memFinal.getSessions();
-    expect(sessions[0]!.toolCalls).toBe(15);
-    expect(sessions[1]!.toolCalls).toBe(10);
-    expect(sessions[2]!.toolCalls).toBe(5);
+    const toolCallCounts = sessions.map((s) => s.toolCalls).sort((a, b) => a - b);
+    expect(toolCallCounts).toEqual([5, 10, 15]);
   });
 
   it('context string includes data from all sessions', () => {

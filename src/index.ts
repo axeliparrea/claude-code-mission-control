@@ -165,7 +165,18 @@ function resolveWorkingDir(): string {
   if (cwdArg) {
     return path.resolve(cwdArg);
   }
-  return process.cwd();
+
+  const currentDir = process.cwd();
+  const mcPackageJson = path.join(currentDir, 'package.json');
+  try {
+    const pkg = JSON.parse(fs.readFileSync(mcPackageJson, 'utf8'));
+    if (pkg.name === 'claude-mission-control') {
+      const home = process.env['HOME'] ?? process.env['USERPROFILE'] ?? currentDir;
+      return home;
+    }
+  } catch { }
+
+  return currentDir;
 }
 
 async function main(): Promise<void> {

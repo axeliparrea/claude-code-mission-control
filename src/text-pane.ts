@@ -124,9 +124,9 @@ export class TextPane implements PaneBase {
     screen.drawBox(this.rect, this.borderColor, this.title, undefined, this.focused);
 
     const height = this.contentHeight;
-    const width = Math.max(0, this.rect.width - 2);
+    const width = Math.max(0, this.rect.width - 4);
     const originRow = this.rect.top + 1;
-    const originCol = this.rect.left + 1;
+    const originCol = this.rect.left + 2;
 
     for (let i = 0; i < height; i++) {
       const lineIndex = this._scrollOffset + i;

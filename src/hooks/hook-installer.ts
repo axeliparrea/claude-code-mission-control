@@ -91,13 +91,21 @@ function buildHookCommand(hookScriptPath: string, hookType: string): string {
 }
 
 /**
- * Builds a single hook entry object for Claude Code settings.
+ * Builds a Claude Code hook entry in the correct format:
+ * `{ matcher: "", hooks: [{ type: "command", command: "..." }] }`
+ *
+ * Uses matcher "" to match all tools. The MC_HOOK_ID env marker is embedded
+ * in the command string as a comment so we can identify our entries later.
  */
 function buildHookEntry(hookScriptPath: string, hookType: string, ipcPath: string): Record<string, unknown> {
   return {
-    type: 'command',
-    command: buildHookCommand(hookScriptPath, hookType),
-    env: { MC_IPC_PATH: ipcPath, MC_HOOK_ID: MC_HOOK_MARKER },
+    matcher: '',
+    hooks: [
+      {
+        type: 'command',
+        command: `MC_IPC_PATH=${ipcPath} MC_HOOK_ID=${MC_HOOK_MARKER} ${buildHookCommand(hookScriptPath, hookType)}`,
+      },
+    ],
   };
 }
 
@@ -107,9 +115,13 @@ function buildHookEntry(hookScriptPath: string, hookType: string, ipcPath: strin
 function isMcHookEntry(entry: unknown): boolean {
   if (typeof entry !== 'object' || entry === null) return false;
   const obj = entry as Record<string, unknown>;
-  if (typeof obj['env'] !== 'object' || obj['env'] === null) return false;
-  const env = obj['env'] as Record<string, unknown>;
-  return env['MC_HOOK_ID'] === MC_HOOK_MARKER;
+  if (!Array.isArray(obj['hooks'])) return false;
+  const hooks = obj['hooks'] as unknown[];
+  return hooks.some((h) => {
+    if (typeof h !== 'object' || h === null) return false;
+    const hook = h as Record<string, unknown>;
+    return typeof hook['command'] === 'string' && (hook['command'] as string).includes(MC_HOOK_MARKER);
+  });
 }
 
 /**

@@ -74,10 +74,13 @@ describe('createHookInstaller', () => {
     expect(Array.isArray(hooks['Stop'])).toBe(true);
 
     const preEntry = hooks['PreToolUse']![0] as Record<string, unknown>;
-    expect(preEntry['type']).toBe('command');
-    expect(preEntry['command']).toContain(HOOK_SCRIPT);
-    expect((preEntry['env'] as Record<string, string>)['MC_IPC_PATH']).toBe(IPC_PATH);
-    expect((preEntry['env'] as Record<string, string>)['MC_HOOK_ID']).toBe(MC_HOOK_MARKER);
+    expect(preEntry['matcher']).toBe('');
+    const innerHooks = preEntry['hooks'] as Array<Record<string, string>>;
+    expect(innerHooks).toHaveLength(1);
+    expect(innerHooks[0]!['type']).toBe('command');
+    expect(innerHooks[0]!['command']).toContain(HOOK_SCRIPT);
+    expect(innerHooks[0]!['command']).toContain(IPC_PATH);
+    expect(innerHooks[0]!['command']).toContain(MC_HOOK_MARKER);
   });
 
   it('install() creates a backup of existing settings', () => {
@@ -173,19 +176,17 @@ describe('createHookInstaller', () => {
     const settings = readSettings(tmpDir);
     const hooks = settings['hooks'] as Record<string, unknown[]>;
 
-    const mcPreEntries = hooks['PreToolUse']!.filter(
-      (e) => (e as Record<string, Record<string, string>>)['env']?.['MC_HOOK_ID'] === MC_HOOK_MARKER,
-    );
-    expect(mcPreEntries).toHaveLength(1);
+    function countMcEntries(entries: unknown[]): number {
+      return entries.filter((e) => {
+        const obj = e as Record<string, unknown>;
+        const innerHooks = obj['hooks'] as Array<Record<string, string>> | undefined;
+        if (!Array.isArray(innerHooks)) return false;
+        return innerHooks.some((h) => h['command']?.includes(MC_HOOK_MARKER));
+      }).length;
+    }
 
-    const mcPostEntries = hooks['PostToolUse']!.filter(
-      (e) => (e as Record<string, Record<string, string>>)['env']?.['MC_HOOK_ID'] === MC_HOOK_MARKER,
-    );
-    expect(mcPostEntries).toHaveLength(1);
-
-    const mcStopEntries = hooks['Stop']!.filter(
-      (e) => (e as Record<string, Record<string, string>>)['env']?.['MC_HOOK_ID'] === MC_HOOK_MARKER,
-    );
-    expect(mcStopEntries).toHaveLength(1);
+    expect(countMcEntries(hooks['PreToolUse']!)).toBe(1);
+    expect(countMcEntries(hooks['PostToolUse']!)).toBe(1);
+    expect(countMcEntries(hooks['Stop']!)).toBe(1);
   });
 });

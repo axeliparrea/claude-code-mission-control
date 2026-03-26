@@ -4,7 +4,9 @@
  * @module terminal-pane
  */
 
-import { Terminal } from '@xterm/headless';
+import xtermHeadless from '@xterm/headless';
+import type { Terminal as TerminalType } from '@xterm/headless';
+const { Terminal } = xtermHeadless;
 import {
   ATTR_BOLD,
   ATTR_DIM,
@@ -51,7 +53,7 @@ export class TerminalPane implements PaneBase {
   borderColor: string;
   focused: boolean;
 
-  private terminal: Terminal;
+  private terminal: TerminalType;
 
   /**
    * Creates a new TerminalPane.

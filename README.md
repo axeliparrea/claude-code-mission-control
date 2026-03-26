@@ -1,144 +1,163 @@
 # Claude Mission Control
 
-Terminal multiplexer for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — real-time visibility into agents, thinking, tools, and file changes.
+Terminal multiplexer para [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Ve todo lo que Claude Code hace en tiempo real: agentes, thinking, tools, y archivos — cada uno en su propio panel.
 
 ```
-┌──────── Claude Mission Control ─── ● 2 agents ─────────┐
+┌──────── Claude Mission Control ─── ● 2 agents ── 8 tools ── 3 files ── hooks ─┐
 │                              │                          │
 │  MAIN terminal               │  THINKING               │
 │  Full Claude Code session    │  reasoning...            │
 │                              ├──────────────────────────┤
-├──────────────┬───────────────┤  MCP TOOLS               │
+├──────────────┬───────────────┤  TOOLS                   │
 │              │               │  ✓ Read src/index.ts     │
-│  AGENT-1     │  AGENT-2      ├──────────────────────────┤
+│  AGENT-1     │  AGENT-2      │  ✓ Edit src/parser.ts    │
+│  Explore     │  coder11111   ├──────────────────────────┤
 │  ✓ done     │  ⟳ working   │  FILES                   │
 │              │               │  M src/index.ts          │
-│              │               │  A src/utils.ts          │
+│              │               │  A src/utils/helper.ts   │
 └──────────────┴───────────────┴──────────────────────────┘
 ```
 
-## What it does
+## Que es
 
-Claude Code runs in a single terminal. When it spawns sub-agents, reasons through problems, calls tools, or edits files — all of that is interleaved in one stream. You have to scroll back and piece together what happened.
+Claude Code corre en una sola terminal. Cuando usa agentes, piensa, llama tools, o edita archivos — todo sale mezclado en un solo stream. Tienes que hacer scroll y reconstruir mentalmente que paso.
 
-Mission Control wraps Claude Code in a pseudo-terminal and splits the output into separate panes:
+**Mission Control** envuelve Claude Code y separa el output en paneles:
 
-- **MAIN** — The full Claude Code terminal (VT100 emulated via xterm headless)
-- **AGENT-1 / AGENT-2** — Sub-agent output, appears automatically when agents spawn
-- **THINKING** — Extended thinking / reasoning stream
-- **MCP TOOLS** — Tool calls with status (pending / success / error)
-- **FILES** — Real-time file changes detected via filesystem watcher
+- **MAIN** — Terminal completa de Claude Code (emulacion VT100 real)
+- **AGENT-1 / AGENT-2** — Sub-agentes, aparecen solos cuando se crean
+- **THINKING** — Stream de razonamiento extendido
+- **TOOLS** — Tool calls con status (pending / success / error)
+- **FILES** — Cambios de archivos en tiempo real
 
-Panes appear and disappear automatically. No manual configuration.
+Todo automatico. Zero config. Entras, usas Claude Code normalmente, y ves todo.
 
-## Install
+## Instalar
 
 ```bash
-git clone https://github.com/yourusername/claude-mission-control.git
+git clone https://github.com/axeliparrea/claude-code-mission-control.git
 cd claude-mission-control
 npm install
 ```
 
-### Platform-specific notes
+Si `node-pty` falla al compilar:
 
-**macOS:**
 ```bash
-xcode-select --install   # if node-pty build fails
-npm rebuild node-pty
+# macOS
+xcode-select --install && npm rebuild node-pty
+
+# Linux (Debian/Ubuntu)
+sudo apt install build-essential python3 && npm rebuild node-pty
+
+# Arch Linux
+sudo pacman -S base-devel python && npm rebuild node-pty
+
+# Windows
+npm install -g windows-build-tools && npm rebuild node-pty
 ```
 
-**Linux (Debian/Ubuntu):**
-```bash
-sudo apt install build-essential python3
-npm rebuild node-pty
-```
-
-**Windows:**
-```bash
-npm install -g windows-build-tools
-npm rebuild node-pty
-```
-
-Requires Windows 10 v1809+ with Windows Terminal recommended.
-
-## Usage
+## Usar
 
 ```bash
-# From any project directory
-cd ~/projects/my-project
-npx claude-mission-control
+# Desde cualquier proyecto
+cd ~/mi-proyecto
+node --import tsx /ruta/a/claude-mission-control/src/index.ts
 
-# Or with npm start from the repo
+# O desde el repo directamente
 cd claude-mission-control
 npm start
 
-# After npm link
-cd ~/projects/my-project
+# Con npm link (para usar `cmc` globalmente)
+cd claude-mission-control
+npm link
+cd ~/mi-proyecto
 cmc
 ```
 
-Claude Code launches inside Mission Control. Type normally — your input goes to Claude Code.
+Claude Code se lanza dentro de Mission Control. Escribes normal — tu input va directo a Claude Code.
 
-## Keyboard shortcuts
+## Controles
 
-| Key | Action |
-|-----|--------|
-| Tab | Cycle focus between panes |
-| Enter | Send input to Claude Code |
-| Up/Down | Scroll focused pane |
-| Escape | Return focus to main / toggle input mode |
-| q | Quit (when not typing) |
-| Ctrl+C | Force quit |
+Hay dos modos:
 
-## How it works
+### Modo passthrough (default)
+
+Todo lo que tecleas va directo a Claude Code. Es como si estuvieras en la terminal normal.
+
+| Tecla | Accion |
+|---|---|
+| Esc | Entrar a modo panel |
+| Ctrl+C x2 | Salir de Mission Control (doble rapido) |
+| Ctrl+C x1 | Se envia a Claude Code (comportamiento normal) |
+
+### Modo panel (Esc para activar)
+
+Navegas entre paneles para hacer scroll y ver contenido.
+
+| Tecla | Accion |
+|---|---|
+| Tab | Siguiente panel |
+| Up / Down | Scroll del panel enfocado |
+| q | Salir de Mission Control |
+| Esc | Volver a modo passthrough |
+
+## Sandbox (probar sin Claude Code real)
+
+```bash
+npm run sandbox
+```
+
+Lanza Mission Control con un mock de Claude Code. Dentro puedes escribir:
+
+- `test thinking` — simula un bloque de pensamiento
+- `test tools` — simula tool calls
+- `test agents` — simula spawn de agentes
+- `test files` — simula cambios de archivos
+- `test hooks` — simula eventos via hook IPC
+- `test all` — todo junto
+- `test stress` — 200 lineas rapidas para stress test
+
+## Tests
+
+```bash
+npm test                  # 227 tests
+npm run test:integration  # solo tests de integracion (MCP pipeline)
+npm run test:watch        # watch mode
+npm run typecheck         # verificar tipos
+```
+
+## Requisitos
+
+- **Node.js 22+**
+- **Claude Code** instalado (`claude` en PATH)
+- Terminal con 256 colores (cualquier terminal moderna)
+- Minimo 100 columnas x 25 filas (terminales chicas usan layout compacto)
+
+## Como funciona (resumen)
 
 ```
-User's terminal
-│
-├── node-pty spawns `claude` in a pseudo-terminal
-│
-├── Raw PTY output feeds into:
-│   ├── @xterm/headless Terminal (full VT100 emulation for MAIN pane)
-│   └── Parser (regex classifier → routes to THINKING/AGENT/MCP/FILES panes)
-│
-├── chokidar watches working directory for file changes → FILES pane
-│
-└── Screen buffer renders all panes with diff-based updates (~30fps)
-    Only changed cells are redrawn each frame.
+Tu terminal
+|
++-- node-pty crea un pseudo-terminal y lanza `claude`
+|
++-- El output raw del PTY alimenta:
+|   +-- @xterm/headless (emulacion VT100 completa para MAIN)
+|   +-- Parser (clasifica lineas -> THINKING / AGENT / TOOLS / FILES)
+|
++-- Hook system (IPC via unix sockets):
+|   +-- MC inyecta hooks en Claude Code settings al iniciar
+|   +-- Claude Code ejecuta hook-forward.js en cada tool call
+|   +-- hook-forward.js envia JSON al IPC socket de MC
+|   +-- MC recibe datos estructurados (tool name, agent type, etc.)
+|
++-- chokidar vigila el directorio de trabajo -> FILES panel
+|
++-- Screen buffer renderiza todos los paneles con diff-based updates (~30fps)
+    Solo las celdas que cambiaron se redibujan cada frame.
 ```
 
-The architecture is **non-invasive** — Claude Code doesn't know it's being wrapped. It sees a normal terminal.
+Claude Code **no sabe** que esta envuelto. Ve una terminal normal.
 
-## Layout states
-
-The layout adapts automatically based on how many sub-agents are active:
-
-**0 agents** — Main pane takes full left column, right column shows thinking/tools/files.
-
-**1 agent** — Main shrinks vertically, agent pane appears below.
-
-**2 agents** — Main shrinks further, two agent panes split the bottom horizontally.
-
-Agents that finish stay visible (dimmed) until their slot is needed by a new agent.
-
-## Requirements
-
-- Node.js 22+
-- Claude Code installed globally (`claude` in PATH)
-- Terminal with 256-color support (most modern terminals)
-- Minimum 100 columns x 25 rows (smaller terminals get compact layout)
-
-## Stack
-
-| Component | Library | Purpose |
-|-----------|---------|---------|
-| Terminal emulation | @xterm/headless | Full VT100 for main pane |
-| Pseudo-terminal | node-pty | Spawn Claude Code cross-platform |
-| File watching | chokidar | Detect file changes in real-time |
-| Rendering | Custom screen buffer | Cell-based diff rendering to stdout |
-
-No TUI framework — just raw ANSI escape codes and a custom compositor.
-
-## License
+## Licencia
 
 MIT

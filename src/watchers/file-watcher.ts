@@ -6,6 +6,7 @@
 
 import { watch } from 'chokidar';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type { FSWatcher } from 'chokidar';
 
 /**
@@ -52,13 +53,62 @@ export interface FileWatcher {
  * Returns true if a file path should be ignored by the watcher.
  * Uses segment-based matching since chokidar v4 does not support glob strings.
  */
-function isIgnoredPath(filePath: string): boolean {
+/**
+ * Parses a .gitignore file and returns an array of pattern strings.
+ */
+function loadGitignorePatterns(cwd: string): string[] {
+  try {
+    const gitignorePath = path.join(cwd, '.gitignore');
+    const content = fs.readFileSync(gitignorePath, 'utf8');
+    return content
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith('#'));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Tests if a relative file path matches a gitignore-style pattern.
+ */
+function matchesPattern(filePath: string, pattern: string): boolean {
+  const cleanPattern = pattern.replace(/\/$/, '');
   const segments = filePath.split(path.sep);
-  if (segments.includes('node_modules')) return true;
-  if (segments.includes('.git')) return true;
-  if (segments.includes('dist')) return true;
-  if (filePath.endsWith('.lock')) return true;
-  if (segments.includes('.DS_Store')) return true;
+
+  if (segments.includes(cleanPattern)) return true;
+
+  if (cleanPattern.startsWith('*')) {
+    const suffix = cleanPattern.slice(1);
+    if (filePath.endsWith(suffix)) return true;
+  }
+
+  if (cleanPattern.includes('/')) {
+    if (filePath.startsWith(cleanPattern)) return true;
+  }
+
+  if (filePath === cleanPattern) return true;
+
+  return false;
+}
+
+const ALWAYS_IGNORED = ['node_modules', '.git', '.DS_Store'];
+
+/**
+ * Returns true if a file path should be ignored by the watcher.
+ * Checks hardcoded ignores + .gitignore patterns.
+ */
+function isIgnoredPath(filePath: string, gitignorePatterns: string[]): boolean {
+  const segments = filePath.split(path.sep);
+
+  for (const dir of ALWAYS_IGNORED) {
+    if (segments.includes(dir)) return true;
+  }
+
+  for (const pattern of gitignorePatterns) {
+    if (matchesPattern(filePath, pattern)) return true;
+  }
+
   return false;
 }
 
@@ -116,8 +166,9 @@ export function createFileWatcher(): FileWatcher {
   return {
     start(cwd: string): void {
       watchedCwd = cwd;
+      const gitignorePatterns = loadGitignorePatterns(cwd);
       watcher = watch(cwd, {
-        ignored: (p: string) => isIgnoredPath(path.relative(cwd, p)),
+        ignored: (p: string) => isIgnoredPath(path.relative(cwd, p), gitignorePatterns),
         ignoreInitial: true,
         persistent: true,
         depth: 5,

@@ -136,14 +136,6 @@ function classifyLine(line: string, state: ParserState): ParsedChunk {
     .replace(/\x1b[^[\]]/g, '')
     .replace(/\x07/g, '');
 
-  if (UI_CHROME_RE.test(clean)) {
-    return { type: 'main', text: line, clean };
-  }
-
-  if (THINKING_LINE_RE.test(clean)) {
-    return { type: 'thinking', text: line, clean };
-  }
-
   if (AGENT_SPAWN_RE.test(clean)) {
     state.agentCounter += 1;
     const agentId = `agent-${state.agentCounter}`;
@@ -160,6 +152,14 @@ function classifyLine(line: string, state: ParserState): ParsedChunk {
   if (AGENT_DONE_RE.test(clean)) {
     const agentId = state.currentAgentId ?? `agent-${state.agentCounter}`;
     return { type: 'agent', text: line, clean, agentId };
+  }
+
+  if (UI_CHROME_RE.test(clean)) {
+    return { type: 'main', text: line, clean };
+  }
+
+  if (THINKING_LINE_RE.test(clean)) {
+    return { type: 'thinking', text: line, clean };
   }
 
   if (TOOL_USE_RE.test(clean) || BASH_CMD_RE.test(clean) || MCP_TOOL_RE.test(clean)) {

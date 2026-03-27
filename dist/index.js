@@ -825,12 +825,6 @@ function extractFileOp(line) {
 }
 function classifyLine(line, state) {
   const clean = line.replace(/\x1b\[[0-9;]*[mGKHFABCDJsu]/g, "").replace(/\x1b\][^\x07]*\x07/g, "").replace(/\x1b\[\?[0-9;]*[hl]/g, "").replace(/\x1b[^[\]]/g, "").replace(/\x07/g, "");
-  if (UI_CHROME_RE.test(clean)) {
-    return { type: "main", text: line, clean };
-  }
-  if (THINKING_LINE_RE.test(clean)) {
-    return { type: "thinking", text: line, clean };
-  }
   if (AGENT_SPAWN_RE.test(clean)) {
     state.agentCounter += 1;
     const agentId = `agent-${state.agentCounter}`;
@@ -845,6 +839,12 @@ function classifyLine(line, state) {
   if (AGENT_DONE_RE.test(clean)) {
     const agentId = state.currentAgentId ?? `agent-${state.agentCounter}`;
     return { type: "agent", text: line, clean, agentId };
+  }
+  if (UI_CHROME_RE.test(clean)) {
+    return { type: "main", text: line, clean };
+  }
+  if (THINKING_LINE_RE.test(clean)) {
+    return { type: "thinking", text: line, clean };
   }
   if (TOOL_USE_RE.test(clean) || BASH_CMD_RE.test(clean) || MCP_TOOL_RE.test(clean)) {
     const toolName = extractToolName(clean);
@@ -1990,9 +1990,11 @@ function createSessionCollector(memory) {
       }
     },
     recordChunk(chunk) {
-      if (chunk.type === "thinking" && chunk.clean.length > 10) {
-        if (thinkingSnippets.length < 20) {
-          thinkingSnippets.push(chunk.clean.slice(0, 100));
+      if (chunk.type === "thinking") {
+        const cleaned = chunk.clean.replace(/[\r\n]+/g, " ").trim();
+        const verbMatch = /^\s*[*·•]\s*(\w+)/i.exec(cleaned);
+        if (verbMatch?.[1] && thinkingSnippets.length < 20) {
+          thinkingSnippets.push(verbMatch[1]);
         }
       }
       if (chunk.type === "file" && chunk.filePath) {
@@ -2018,7 +2020,8 @@ function createSessionCollector(memory) {
       const toolList = [...toolNames].join(", ");
       const agentList = [...agentTypes].join(", ");
       const fileList = [...filesChanged].slice(0, 10);
-      const thinkingTopics = thinkingSnippets.slice(0, 5);
+      const uniqueThinking = [...new Set(thinkingSnippets)];
+      const thinkingTopics = uniqueThinking.slice(0, 5);
       const summaryParts = [];
       if (toolCalls > 0) summaryParts.push(`${toolCalls} tool calls (${toolList})`);
       if (agentTypes.size > 0) summaryParts.push(`agents: ${agentList}`);

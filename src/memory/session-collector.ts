@@ -93,9 +93,11 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
     },
 
     recordChunk(chunk: ParsedChunk): void {
-      if (chunk.type === 'thinking' && chunk.clean.length > 10) {
-        if (thinkingSnippets.length < 20) {
-          thinkingSnippets.push(chunk.clean.slice(0, 100));
+      if (chunk.type === 'thinking') {
+        const cleaned = chunk.clean.replace(/[\r\n]+/g, ' ').trim();
+        const verbMatch = /^\s*[*·•]\s*(\w+)/i.exec(cleaned);
+        if (verbMatch?.[1] && thinkingSnippets.length < 20) {
+          thinkingSnippets.push(verbMatch[1]);
         }
       }
       if (chunk.type === 'file' && chunk.filePath) {
@@ -124,7 +126,8 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
       const toolList = [...toolNames].join(', ');
       const agentList = [...agentTypes].join(', ');
       const fileList = [...filesChanged].slice(0, 10);
-      const thinkingTopics = thinkingSnippets.slice(0, 5);
+      const uniqueThinking = [...new Set(thinkingSnippets)];
+      const thinkingTopics = uniqueThinking.slice(0, 5);
 
       const summaryParts: string[] = [];
       if (toolCalls > 0) summaryParts.push(`${toolCalls} tool calls (${toolList})`);

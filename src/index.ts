@@ -20,15 +20,18 @@ import { calculateLayout } from './layout.js';
 import { createHookServer } from './hooks/hook-server.js';
 import { createHookInstaller } from './hooks/hook-installer.js';
 import { createFileWatcher } from './watchers/file-watcher.js';
+import { createOrchestrator } from './orchestrator.js';
 import { createProjectMemory } from './memory/project-memory.js';
 import { createSessionCollector } from './memory/session-collector.js';
 import { fg, bg, icons } from './theme.js';
 import type { LayoutState, TrackedAgent, ParsedChunk, Rect } from './types.js';
 import type { HookEvent } from './hooks/hook-server.js';
 
+const TAB_NAMES = ['Tools', 'Files', 'Orch', 'Web'] as const;
+
 const RENDER_INTERVAL_MS = 33;
 const WINDOWS_RESIZE_POLL_MS = 500;
-const MAX_VISIBLE_AGENT_PANES = 6;
+const MAX_VISIBLE_AGENT_PANES = 4;
 const DOUBLE_CTRLC_MS = 500;
 
 /**
@@ -267,6 +270,15 @@ async function main(): Promise<void> {
     fg.main,
   );
 
+  const toolsPane: TextPane = createTextPane('tools', 'Tools', layout.rightTab, fg.mcp, 300);
+  const filesPane: TextPane = createTextPane('files', 'Files', layout.rightTab, fg.files, 50);
+  const orchPane: TextPane = createTextPane('orch', 'Orchestrator', layout.rightTab, fg.agent, 500);
+  const webPane: TextPane = createTextPane('web', 'Web', layout.rightTab, fg.main, 1000);
+  const orchestrator = createOrchestrator();
+
+  let activeTab = 0;
+  const tabPanes: TextPane[] = [toolsPane, filesPane, orchPane, webPane];
+
   const agents = new Map<string, TrackedAgent>();
   const agentPanes = new Map<string, TextPane>();
   const agentSlotOrder: string[] = [];
@@ -313,6 +325,7 @@ async function main(): Promise<void> {
     layout = calculateLayout(c, r, layoutState, agentSlotOrder.length);
 
     mainPane.resize(layout.main);
+    for (const tp of tabPanes) { tp.rect = layout.rightTab; }
 
     layout.agents.forEach((rect, index) => {
       const agentId = agentSlotOrder[index];
@@ -419,28 +432,27 @@ async function main(): Promise<void> {
         : `${fg.thinking}${icons.pending}\x1b[0m`;
       const name = chunk.toolName ?? 'tool';
       const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1b[0m` : '';
+      const toolLine = `${icon} ${name}${server}`;
+      toolsPane.appendLine(toolLine);
       const ap = activeAgentPane();
-      if (ap) {
-        ap.appendLine(`${icon} ${name}${server}`);
-      }
+      if (ap) ap.appendLine(toolLine);
       return;
     }
 
     if (chunk.type === 'file') {
       fileCount += 1;
+      const label = chunk.fileOp === 'A' ? `${fg.success}+` : chunk.fileOp === 'D' ? `${fg.error}-` : `${fg.main}M`;
+      const fileLine = `${label}\x1b[0m ${chunk.filePath ?? ''}`;
+      filesPane.appendLine(fileLine);
       const ap = activeAgentPane();
-      if (ap) {
-        const label = chunk.fileOp === 'A' ? `${fg.success}+` : chunk.fileOp === 'D' ? `${fg.error}-` : `${fg.main}M`;
-        ap.appendLine(`${label}\x1b[0m ${chunk.filePath ?? ''}`);
-      }
+      if (ap) ap.appendLine(fileLine);
       return;
     }
 
     if (chunk.type === 'error') {
+      toolsPane.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1b[0m`);
       const ap = activeAgentPane();
-      if (ap) {
-        ap.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1b[0m`);
-      }
+      if (ap) ap.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1b[0m`);
       return;
     }
 
@@ -466,15 +478,17 @@ async function main(): Promise<void> {
    */
   function routeHookEvent(event: HookEvent): void {
     sessionCollector.recordHookEvent(event);
+    orchestrator.handleEvent(event);
 
     if (event.type === 'tool_start' || event.type === 'tool_end') {
       toolCount += 1;
+      const lines = formatHookToolLines(event);
+      for (const line of lines) {
+        toolsPane.appendLine(line);
+      }
       const ap = activeAgentPane();
       if (ap) {
-        const lines = formatHookToolLines(event);
-        for (const line of lines) {
-          ap.appendLine(line);
-        }
+        for (const line of lines) { ap.appendLine(line); }
       }
       return;
     }
@@ -527,9 +541,32 @@ async function main(): Promise<void> {
       agentPanes.get(id)?.renderTo(screen);
     }
 
+    if (activeTab === 2) {
+      orchPane.clear();
+      for (const line of orchestrator.render()) { orchPane.appendLine(line); }
+    }
+
+    const tbr = layout.tabBar;
+    if (tbr.width > 0) {
+      let tabStr = '';
+      for (let i = 0; i < TAB_NAMES.length; i++) {
+        const label = `${i + 1}:${TAB_NAMES[i]}`;
+        tabStr += i === activeTab
+          ? `${fg.main}\x1b[1m ${label} \x1b[0m`
+          : `${fg.textDim} ${label} \x1b[0m`;
+        if (i < TAB_NAMES.length - 1) tabStr += `${fg.textDim}|`;
+      }
+      screen.writeAnsiString(tbr.top, tbr.left, tbr.width, bg.headerBg + tabStr + '\x1b[0m');
+    }
+
+    const activePane = tabPanes[activeTab];
+    if (activePane && layout.rightTab.width > 0) {
+      activePane.renderTo(screen);
+    }
+
     const inputRow = r - 1;
     if (panelMode) {
-      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane esc=back\x1b[0m`);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane 1-4=tab esc=back\x1b[0m`);
     } else {
       screen.writeAnsiString(inputRow, 0, c, `${fg.textDim}${icons.dot} passthrough\x1b[0m`);
     }
@@ -566,6 +603,10 @@ async function main(): Promise<void> {
     }
 
     if (panelMode) {
+      if (key >= '1' && key <= '4') {
+        activeTab = parseInt(key) - 1;
+        return;
+      }
       if (key === 'q') {
         cleanup();
         process.exit(0);
@@ -661,6 +702,8 @@ async function main(): Promise<void> {
   fileWatcher.onChange((event) => {
     fileCount += 1;
     sessionCollector.recordFileChange(event.filePath, event.changeType);
+    const label = event.changeType === 'A' ? `${fg.success}+` : event.changeType === 'D' ? `${fg.error}-` : `${fg.main}M`;
+    filesPane.appendLine(`${label}\x1b[0m ${event.filePath}`);
   });
 
   try {

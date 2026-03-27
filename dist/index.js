@@ -885,8 +885,8 @@ function createParser() {
 // src/layout.ts
 var RIGHT_COLUMN_MIN_COLS = 30;
 var RIGHT_COLUMN_RATIO = 0.35;
-var COMPACT_COLS_THRESHOLD = 100;
-var COMPACT_ROWS_THRESHOLD = 25;
+var COMPACT_COLS_THRESHOLD = 60;
+var COMPACT_ROWS_THRESHOLD = 15;
 function zeroRect() {
   return { left: 0, top: 0, width: 0, height: 0 };
 }
@@ -917,12 +917,11 @@ function calculateLayout(cols, rows, state, agentCount) {
   const isCompact = state === "compact" || cols < COMPACT_COLS_THRESHOLD || rows < COMPACT_ROWS_THRESHOLD;
   const header = { left: 0, top: 0, width: cols, height: 1 };
   if (isCompact) {
-    const mainHeight2 = Math.max(1, Math.floor(rows * 0.7) - 1);
     const main3 = {
       left: 0,
       top: 1,
       width: cols,
-      height: mainHeight2
+      height: Math.max(1, rows - 2)
     };
     const input2 = {
       left: 0,
@@ -942,7 +941,8 @@ function calculateLayout(cols, rows, state, agentCount) {
       tabBar: zeroRect()
     };
   }
-  const rightWidth = Math.max(RIGHT_COLUMN_MIN_COLS, Math.floor(cols * RIGHT_COLUMN_RATIO));
+  const ratio = cols < 120 ? 0.28 : RIGHT_COLUMN_RATIO;
+  const rightWidth = Math.max(RIGHT_COLUMN_MIN_COLS, Math.floor(cols * ratio));
   const leftWidth = cols - rightWidth;
   const rightTop = 1;
   const rightHeight = rows - 1;
@@ -968,8 +968,8 @@ function calculateLayout(cols, rows, state, agentCount) {
     return { header, main: main3, thinking, mcp, files, agents: [], input, rightTab, tabBar };
   }
   if (state === "single" || agentCount === 1) {
-    const mainHeight2 = Math.max(1, Math.floor(leftContentHeight * 0.55));
-    const agentHeight = leftContentHeight - mainHeight2;
+    const agentHeight = Math.max(5, Math.floor(leftContentHeight * 0.35));
+    const mainHeight2 = leftContentHeight - agentHeight;
     const main3 = {
       left: 0,
       top: leftContentTop,
@@ -984,8 +984,8 @@ function calculateLayout(cols, rows, state, agentCount) {
     };
     return { header, main: main3, thinking, mcp, files, agents: [agent12], input, rightTab, tabBar };
   }
-  const mainHeight = Math.max(1, Math.floor(leftContentHeight * 0.45));
-  const agentAreaHeight = leftContentHeight - mainHeight;
+  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.4));
+  const mainHeight = leftContentHeight - agentAreaHeight;
   const agentWidth = Math.floor(leftWidth / 2);
   const agent2Width = leftWidth - agentWidth;
   const main2 = {

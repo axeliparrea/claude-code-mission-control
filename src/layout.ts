@@ -12,10 +12,10 @@ const RIGHT_COLUMN_MIN_COLS = 30;
 const RIGHT_COLUMN_RATIO = 0.35;
 
 /** Compact layout threshold in columns. */
-const COMPACT_COLS_THRESHOLD = 100;
+const COMPACT_COLS_THRESHOLD = 60;
 
 /** Compact layout threshold in rows. */
-const COMPACT_ROWS_THRESHOLD = 25;
+const COMPACT_ROWS_THRESHOLD = 15;
 
 /**
  * The result of a layout calculation, containing the {@link Rect} for every
@@ -116,12 +116,11 @@ export function calculateLayout(
   const header: Rect = { left: 0, top: 0, width: cols, height: 1 };
 
   if (isCompact) {
-    const mainHeight = Math.max(1, Math.floor(rows * 0.7) - 1);
     const main: Rect = {
       left: 0,
       top: 1,
       width: cols,
-      height: mainHeight,
+      height: Math.max(1, rows - 2),
     };
     const input: Rect = {
       left: 0,
@@ -143,7 +142,8 @@ export function calculateLayout(
     };
   }
 
-  const rightWidth = Math.max(RIGHT_COLUMN_MIN_COLS, Math.floor(cols * RIGHT_COLUMN_RATIO));
+  const ratio = cols < 120 ? 0.28 : RIGHT_COLUMN_RATIO;
+  const rightWidth = Math.max(RIGHT_COLUMN_MIN_COLS, Math.floor(cols * ratio));
   const leftWidth = cols - rightWidth;
   const rightTop = 1;
   const rightHeight = rows - 1;
@@ -176,8 +176,8 @@ export function calculateLayout(
   }
 
   if (state === 'single' || agentCount === 1) {
-    const mainHeight = Math.max(1, Math.floor(leftContentHeight * 0.55));
-    const agentHeight = leftContentHeight - mainHeight;
+    const agentHeight = Math.max(5, Math.floor(leftContentHeight * 0.35));
+    const mainHeight = leftContentHeight - agentHeight;
 
     const main: Rect = {
       left: 0,
@@ -196,8 +196,8 @@ export function calculateLayout(
     return { header, main, thinking, mcp, files, agents: [agent1], input, rightTab, tabBar };
   }
 
-  const mainHeight = Math.max(1, Math.floor(leftContentHeight * 0.45));
-  const agentAreaHeight = leftContentHeight - mainHeight;
+  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.40));
+  const mainHeight = leftContentHeight - agentAreaHeight;
   const agentWidth = Math.floor(leftWidth / 2);
   const agent2Width = leftWidth - agentWidth;
 

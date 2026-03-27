@@ -94,12 +94,13 @@ describe('calculateLayout', () => {
     expect(agent.top).toBe(layout.main.top + layout.main.height);
   });
 
-  it('single state: main is roughly 55% of content height', () => {
+  it('single state: agent gets at least 5 rows, main gets the rest', () => {
     const rows = 40;
     const layout = calculateLayout(120, rows, 'single', 1);
-    const contentHeight = rows - 2; // minus header and input rows
-    const expectedMainHeight = Math.max(1, Math.floor(contentHeight * 0.55));
-    expect(layout.main.height).toBe(expectedMainHeight);
+    const contentHeight = rows - 2;
+    const agentHeight = Math.max(5, Math.floor(contentHeight * 0.35));
+    expect(layout.agents[0]!.height).toBe(agentHeight);
+    expect(layout.main.height).toBe(contentHeight - agentHeight);
   });
 
   // --- Dual agents ---
@@ -128,12 +129,12 @@ describe('calculateLayout', () => {
     expect(a1.width + a2.width).toBe(leftWidth);
   });
 
-  it('dual state: main is roughly 45% of content height', () => {
+  it('dual state: agents get at least 5 rows each, main gets the rest', () => {
     const rows = 40;
     const layout = calculateLayout(120, rows, 'dual', 2);
     const contentHeight = rows - 2;
-    const expectedMainHeight = Math.max(1, Math.floor(contentHeight * 0.45));
-    expect(layout.main.height).toBe(expectedMainHeight);
+    const agentArea = Math.max(5, Math.floor(contentHeight * 0.40));
+    expect(layout.main.height).toBe(contentHeight - agentArea);
   });
 
   // --- Right column ---
@@ -173,32 +174,32 @@ describe('calculateLayout', () => {
 
   // --- Compact mode ---
 
-  it('compact mode with cols < 100: no right column (zero rects)', () => {
-    const layout = calculateLayout(80, 40, 'solo', 0);
+  it('compact mode with cols < 60: no right column (zero rects)', () => {
+    const layout = calculateLayout(50, 40, 'solo', 0);
     expect(layout.thinking.width).toBe(0);
     expect(layout.mcp.width).toBe(0);
     expect(layout.files.width).toBe(0);
   });
 
-  it('compact mode with cols < 100: main takes full width', () => {
-    const layout = calculateLayout(80, 40, 'solo', 0);
-    expect(layout.main.width).toBe(80);
+  it('compact mode with cols < 60: main takes full width', () => {
+    const layout = calculateLayout(50, 40, 'solo', 0);
+    expect(layout.main.width).toBe(50);
   });
 
-  it('compact mode with rows < 25: no right column', () => {
-    const layout = calculateLayout(120, 20, 'solo', 0);
+  it('compact mode with rows < 15: no right column', () => {
+    const layout = calculateLayout(120, 12, 'solo', 0);
     expect(layout.thinking.width).toBe(0);
     expect(layout.mcp.width).toBe(0);
     expect(layout.files.width).toBe(0);
   });
 
-  it('compact mode with rows < 25: main takes full width', () => {
-    const layout = calculateLayout(120, 20, 'solo', 0);
+  it('compact mode with rows < 15: main takes full width', () => {
+    const layout = calculateLayout(120, 12, 'solo', 0);
     expect(layout.main.width).toBe(120);
   });
 
   it('compact mode returns empty agents array', () => {
-    const layout = calculateLayout(80, 40, 'dual', 2);
+    const layout = calculateLayout(50, 40, 'dual', 2);
     expect(layout.agents).toHaveLength(0);
   });
 

@@ -1,106 +1,81 @@
 /**
  * Calculates pane positions and sizes based on terminal dimensions and layout state.
+ *
+ * Layout: Main pane on top (full width), agent panes below (full width, grid).
+ * No right column. Agents fill all available space below the main pane.
+ *
  * @module layout
  */
 
 import type { Rect, LayoutState } from './types.js';
 
-/** Minimum column count for the right sidebar to be shown. */
-const RIGHT_COLUMN_MIN_COLS = 30;
-
-/** Fraction of total width allocated to the right column. */
-const RIGHT_COLUMN_RATIO = 0.35;
-
-/** Compact layout threshold in columns. */
 const COMPACT_COLS_THRESHOLD = 60;
-
-/** Compact layout threshold in rows. */
 const COMPACT_ROWS_THRESHOLD = 15;
 
 /**
- * The result of a layout calculation, containing the {@link Rect} for every
- * named pane region.  Agent panes are listed in slot order.
+ * Layout calculation result.
  */
 export interface LayoutResult {
-  /** Full-width header bar at row 0. */
   header: Rect;
-  /** Main (Claude Code terminal) pane on the left column. */
   main: Rect;
-  /** Thinking content pane — top third of right column. */
   thinking: Rect;
-  /** Tool-call / MCP pane — middle third of right column. */
   mcp: Rect;
-  /** File-change pane — bottom third of right column. */
   files: Rect;
-  /** Zero, one, or two agent panes below the main pane. */
   agents: Rect[];
-  /** Single-row input bar at the bottom of the left column. */
   input: Rect;
-  /** Full right column rect for tabbed single-pane mode (row 2 to bottom). */
   rightTab: Rect;
-  /** Tab bar row at the top of the right column. */
   tabBar: Rect;
 }
 
-/**
- * Produces a zero-size {@link Rect} positioned at the origin.
- * Used to represent hidden panes without breaking callers that inspect the rect.
- */
 function zeroRect(): Rect {
   return { left: 0, top: 0, width: 0, height: 0 };
 }
 
 /**
- * Splits the right column into three equal vertical thirds.
- * When the column height is not perfectly divisible the last section absorbs
- * any remainder rows.
+ * Calculates a dynamic grid of agent panes filling the given area.
+ * Columns = min(agentCount, maxCols). Rows = ceil(agentCount / cols).
  */
-function splitRightColumn(rightLeft: number, rightTop: number, rightWidth: number, rightHeight: number): [Rect, Rect, Rect] {
-  const third = Math.floor(rightHeight / 3);
-  const remainder = rightHeight - third * 3;
+function buildAgentGrid(
+  agentCount: number,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): Rect[] {
+  if (agentCount === 0 || width < 4 || height < 3) return [];
 
-  const thinking: Rect = {
-    left: rightLeft,
-    top: rightTop,
-    width: rightWidth,
-    height: third,
-  };
+  const maxCols = width >= 120 ? 3 : width >= 60 ? 2 : 1;
+  const agentCols = Math.min(agentCount, maxCols);
+  const agentRows = Math.ceil(agentCount / agentCols);
+  const colWidth = Math.floor(width / agentCols);
+  const rowHeight = Math.max(3, Math.floor(height / agentRows));
 
-  const mcp: Rect = {
-    left: rightLeft,
-    top: rightTop + third,
-    width: rightWidth,
-    height: third,
-  };
+  const rects: Rect[] = [];
+  for (let i = 0; i < agentCount; i++) {
+    const col = i % agentCols;
+    const row = Math.floor(i / agentCols);
+    const isLastCol = col === agentCols - 1;
+    const isLastRow = row === agentRows - 1;
 
-  const files: Rect = {
-    left: rightLeft,
-    top: rightTop + third * 2,
-    width: rightWidth,
-    height: third + remainder,
-  };
+    rects.push({
+      left: left + col * colWidth,
+      top: top + row * rowHeight,
+      width: isLastCol ? width - col * colWidth : colWidth,
+      height: isLastRow ? height - row * rowHeight : rowHeight,
+    });
+  }
 
-  return [thinking, mcp, files];
+  return rects;
 }
 
 /**
- * Calculates the complete layout for a given terminal size and state.
+ * Calculates the layout.
  *
- * Layout regions:
- * - Row 0 is always the header bar (full width).
- * - The bottom row of the left column is always the input bar.
- * - The right column is 35% of total width (≥ 30 cols) and spans rows 1–bottom.
- * - The left column fills the remaining width.
- * - Agent panes appear below the main pane in the left column.
- *
- * Compact mode (< 100 cols OR < 25 rows) collapses the right column and gives
- * the main pane the full width.
- *
- * @param cols - Current terminal width in columns
- * @param rows - Current terminal height in rows
- * @param state - Active layout state controlling how agents are positioned
- * @param agentCount - Number of currently active agent panes (0, 1, or 2)
- * @returns A {@link LayoutResult} with computed {@link Rect} values for every pane
+ * - Row 0: header (full width)
+ * - Row 1 to (rows-2): main pane + agent panes (full width, stacked)
+ * - Last row: input bar (full width)
+ * - No agents: main takes full area
+ * - With agents: main takes top portion, agents fill bottom in a grid
  */
 export function calculateLayout(
   cols: number,
@@ -114,115 +89,34 @@ export function calculateLayout(
     rows < COMPACT_ROWS_THRESHOLD;
 
   const header: Rect = { left: 0, top: 0, width: cols, height: 1 };
+  const input: Rect = { left: 0, top: rows - 1, width: cols, height: 1 };
+  const empty = zeroRect();
 
-  if (isCompact) {
-    const main: Rect = {
-      left: 0,
-      top: 1,
-      width: cols,
-      height: Math.max(1, rows - 2),
-    };
-    const input: Rect = {
-      left: 0,
-      top: rows - 1,
-      width: cols,
-      height: 1,
-    };
+  const contentTop = 1;
+  const contentHeight = Math.max(1, rows - 2);
 
+  if (isCompact || agentCount === 0) {
+    const main: Rect = { left: 0, top: contentTop, width: cols, height: contentHeight };
     return {
-      header,
-      main,
-      thinking: zeroRect(),
-      mcp: zeroRect(),
-      files: zeroRect(),
+      header, main,
+      thinking: empty, mcp: empty, files: empty,
       agents: [],
-      input,
-      rightTab: zeroRect(),
-      tabBar: zeroRect(),
+      input, rightTab: empty, tabBar: empty,
     };
   }
 
-  const ratio = cols < 120 ? 0.28 : RIGHT_COLUMN_RATIO;
-  const rightWidth = Math.max(RIGHT_COLUMN_MIN_COLS, Math.floor(cols * ratio));
-  const leftWidth = cols - rightWidth;
-  const rightTop = 1;
-  const rightHeight = rows - 1;
+  const agentRatio = agentCount === 1 ? 0.35 : agentCount <= 3 ? 0.45 : 0.55;
+  const agentAreaHeight = Math.max(5, Math.floor(contentHeight * agentRatio));
+  const mainHeight = contentHeight - agentAreaHeight;
 
-  const [thinking, mcp, files] = splitRightColumn(leftWidth, rightTop, rightWidth, rightHeight);
+  const main: Rect = { left: 0, top: contentTop, width: cols, height: mainHeight };
+  const agentTop = contentTop + mainHeight;
+  const agents = buildAgentGrid(agentCount, 0, agentTop, cols, agentAreaHeight);
 
-  const tabBar: Rect = { left: leftWidth, top: 1, width: rightWidth, height: 1 };
-  const rightTab: Rect = { left: leftWidth, top: 2, width: rightWidth, height: rows - 2 };
-
-  const input: Rect = {
-    left: 0,
-    top: rows - 1,
-    width: leftWidth,
-    height: 1,
+  return {
+    header, main,
+    thinking: empty, mcp: empty, files: empty,
+    agents, input,
+    rightTab: empty, tabBar: empty,
   };
-
-  const leftContentTop = 1;
-  const leftContentBottom = rows - 2;
-  const leftContentHeight = leftContentBottom - leftContentTop + 1;
-
-  if (state === 'solo' || agentCount === 0) {
-    const main: Rect = {
-      left: 0,
-      top: leftContentTop,
-      width: leftWidth,
-      height: leftContentHeight,
-    };
-
-    return { header, main, thinking, mcp, files, agents: [], input, rightTab, tabBar };
-  }
-
-  if (state === 'single' || agentCount === 1) {
-    const agentHeight = Math.max(5, Math.floor(leftContentHeight * 0.35));
-    const mainHeight = leftContentHeight - agentHeight;
-
-    const main: Rect = {
-      left: 0,
-      top: leftContentTop,
-      width: leftWidth,
-      height: mainHeight,
-    };
-
-    const agent1: Rect = {
-      left: 0,
-      top: leftContentTop + mainHeight,
-      width: leftWidth,
-      height: agentHeight,
-    };
-
-    return { header, main, thinking, mcp, files, agents: [agent1], input, rightTab, tabBar };
-  }
-
-  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.50));
-  const mainHeight = leftContentHeight - agentAreaHeight;
-
-  const main: Rect = {
-    left: 0,
-    top: leftContentTop,
-    width: leftWidth,
-    height: mainHeight,
-  };
-
-  const agentCols = Math.min(agentCount, 2);
-  const agentRows = Math.ceil(agentCount / agentCols);
-  const agentColWidth = Math.floor(leftWidth / agentCols);
-  const agentRowHeight = Math.max(3, Math.floor(agentAreaHeight / agentRows));
-
-  const agentRects: Rect[] = [];
-  for (let i = 0; i < agentCount; i++) {
-    const col = i % agentCols;
-    const row = Math.floor(i / agentCols);
-    const isLastCol = col === agentCols - 1;
-    agentRects.push({
-      left: col * agentColWidth,
-      top: leftContentTop + mainHeight + row * agentRowHeight,
-      width: isLastCol ? leftWidth - col * agentColWidth : agentColWidth,
-      height: row === agentRows - 1 ? agentAreaHeight - row * agentRowHeight : agentRowHeight,
-    });
-  }
-
-  return { header, main, thinking, mcp, files, agents: agentRects, input, rightTab, tabBar };
 }

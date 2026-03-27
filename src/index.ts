@@ -20,20 +20,15 @@ import { calculateLayout } from './layout.js';
 import { createHookServer } from './hooks/hook-server.js';
 import { createHookInstaller } from './hooks/hook-installer.js';
 import { createFileWatcher } from './watchers/file-watcher.js';
-import { createOrchestrator } from './orchestrator.js';
-import { createWebViewer } from './web-viewer.js';
 import { createProjectMemory } from './memory/project-memory.js';
 import { createSessionCollector } from './memory/session-collector.js';
 import { fg, bg, icons } from './theme.js';
 import type { LayoutState, TrackedAgent, ParsedChunk, Rect } from './types.js';
 import type { HookEvent } from './hooks/hook-server.js';
 
-const TAB_NAMES = ['Think', 'Tools', 'Files', 'Orch', 'Web'] as const;
-type TabName = typeof TAB_NAMES[number];
-
 const RENDER_INTERVAL_MS = 33;
 const WINDOWS_RESIZE_POLL_MS = 500;
-const MAX_VISIBLE_AGENT_PANES = 4;
+const MAX_VISIBLE_AGENT_PANES = 6;
 const DOUBLE_CTRLC_MS = 500;
 
 /**
@@ -195,15 +190,15 @@ function buildHeaderContent(
 ): string {
   const dot = fg.error + icons.dot + '\x1b[0m';
   const greenDot = fg.success + icons.dot + '\x1b[0m';
-  const title = fg.textPrimary + ' Claude Mission Control\x1b[0m';
-  const agentsBadge = ` ${greenDot} ${fg.textSecondary}${agentCount} agents\x1b[0m`;
+  const title = fg.textPrimary + ' Mission Control\x1b[0m';
+  const agentsBadge = agentCount > 0
+    ? ` ${greenDot} ${fg.success}${agentCount} agents\x1b[0m`
+    : ` ${fg.textDim}0 agents\x1b[0m`;
   const toolsBadge = ` ${fg.textDim}${toolCount} tools\x1b[0m`;
-  const filesBadge = ` ${fg.textDim}${fileCount} files\x1b[0m`;
-  const hookBadge = hookConnected
-    ? ` ${fg.success}hooks${'\x1b[0m'}`
-    : ` ${fg.textDim}hooks:off${'\x1b[0m'}`;
-  const keybinds = ` ${fg.textDim}esc=panels 1-5=tabs q=quit\x1b[0m`;
-  return ` ${dot}${title} │${agentsBadge} │${toolsBadge} │${filesBadge} │${hookBadge} │${keybinds}`;
+  const filesBadge = fileCount > 0 ? ` ${fg.textDim}${fileCount} files\x1b[0m` : '';
+  const hookBadge = hookConnected ? ` ${fg.success}hooks\x1b[0m` : '';
+  const keybinds = ` ${fg.textDim}esc=scroll q=quit\x1b[0m`;
+  return ` ${dot}${title} │${agentsBadge} │${toolsBadge}${filesBadge}${hookBadge} │${keybinds}`;
 }
 
 /**
@@ -272,52 +267,6 @@ async function main(): Promise<void> {
     fg.main,
   );
 
-  const thinkingPane: TextPane = createTextPane(
-    'thinking',
-    'Thinking',
-    layout.rightTab,
-    fg.thinking,
-    200,
-  );
-
-  const mcpPane: TextPane = createTextPane(
-    'mcp',
-    'Tools',
-    layout.rightTab,
-    fg.mcp,
-    300,
-  );
-
-  const filesPane: TextPane = createTextPane(
-    'files',
-    'Files',
-    layout.rightTab,
-    fg.files,
-    50,
-  );
-
-  const orchestratorPane: TextPane = createTextPane(
-    'orchestrator',
-    'Orchestrator',
-    layout.rightTab,
-    fg.agent,
-    500,
-  );
-
-  const browserPane: TextPane = createTextPane(
-    'browser',
-    'Browser',
-    layout.rightTab,
-    fg.main,
-    1000,
-  );
-
-  const orchestrator = createOrchestrator();
-  const webViewer = createWebViewer();
-
-  let activeTab: number = 0;
-  const tabPanes: TextPane[] = [thinkingPane, mcpPane, filesPane, orchestratorPane, browserPane];
-
   const agents = new Map<string, TrackedAgent>();
   const agentPanes = new Map<string, TextPane>();
   const agentSlotOrder: string[] = [];
@@ -340,7 +289,6 @@ async function main(): Promise<void> {
       const pane = agentPanes.get(id);
       if (pane) panes.push(pane);
     }
-    panes.push(thinkingPane);
     return panes;
   }
 
@@ -365,11 +313,6 @@ async function main(): Promise<void> {
     layout = calculateLayout(c, r, layoutState, agentSlotOrder.length);
 
     mainPane.resize(layout.main);
-    thinkingPane.rect = layout.rightTab;
-    mcpPane.rect = layout.rightTab;
-    filesPane.rect = layout.rightTab;
-    orchestratorPane.rect = layout.rightTab;
-    browserPane.rect = layout.rightTab;
 
     layout.agents.forEach((rect, index) => {
       const agentId = agentSlotOrder[index];
@@ -441,20 +384,6 @@ async function main(): Promise<void> {
     sessionCollector.recordChunk(chunk);
 
     if (chunk.type === 'thinking') {
-      const effortMatch = /\(thinking with (\w+) effort\)/i.exec(chunk.clean);
-      const verbMatch = /^\s*[*·•]\s*(\w+)/i.exec(chunk.clean);
-      const durationMatch = /cogitated for (\d+s?)/i.exec(chunk.clean);
-
-      if (durationMatch) {
-        thinkingPane.appendLine(`${fg.success}${icons.success} Done${fg.textDim} (${durationMatch[1]})\x1b[0m`);
-      } else if (verbMatch) {
-        const verb = verbMatch[1] ?? 'Thinking';
-        const effort = effortMatch ? ` ${fg.textDim}[${effortMatch[1]}]\x1b[0m` : '';
-        const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        thinkingPane.appendLine(`${fg.thinking}${icons.pending} ${verb}...${effort} ${fg.textDim}${time}\x1b[0m`);
-      } else {
-        thinkingPane.appendLine(`${fg.thinking}${chunk.clean}\x1b[0m`);
-      }
       return;
     }
 
@@ -483,9 +412,6 @@ async function main(): Promise<void> {
 
     if (chunk.type === 'mcp') {
       toolCount += 1;
-      const time = new Date().toLocaleTimeString('en-US', {
-        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
-      });
       const icon = chunk.toolStatus === 'success'
         ? `${fg.success}${icons.success}\x1b[0m`
         : chunk.toolStatus === 'error'
@@ -493,33 +419,24 @@ async function main(): Promise<void> {
         : `${fg.thinking}${icons.pending}\x1b[0m`;
       const name = chunk.toolName ?? 'tool';
       const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1b[0m` : '';
-      const toolLine = `${icon} ${name}${server}`;
-
-      mcpPane.appendLine(`${toolLine} ${fg.textDim}${time}\x1b[0m`);
-      if (chunk.clean && chunk.clean.length > 20) {
-        mcpPane.appendLine(`  ${fg.textDim}${icons.arrow} ${truncate(chunk.clean, 60)}\x1b[0m`);
-      }
-
       const ap = activeAgentPane();
       if (ap) {
-        ap.appendLine(`${toolLine}`);
+        ap.appendLine(`${icon} ${name}${server}`);
       }
       return;
     }
 
     if (chunk.type === 'file') {
       fileCount += 1;
-      filesPane.appendLine(formatFileChange(chunk));
       const ap = activeAgentPane();
       if (ap) {
-        const label = chunk.fileOp === 'A' ? '+' : chunk.fileOp === 'D' ? '-' : 'M';
-        ap.appendLine(`${fg.textDim}${label} ${chunk.filePath ?? ''}\x1b[0m`);
+        const label = chunk.fileOp === 'A' ? `${fg.success}+` : chunk.fileOp === 'D' ? `${fg.error}-` : `${fg.main}M`;
+        ap.appendLine(`${label}\x1b[0m ${chunk.filePath ?? ''}`);
       }
       return;
     }
 
     if (chunk.type === 'error') {
-      mcpPane.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1b[0m`);
       const ap = activeAgentPane();
       if (ap) {
         ap.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1b[0m`);
@@ -548,17 +465,16 @@ async function main(): Promise<void> {
    * Routes a hook event to the appropriate pane.
    */
   function routeHookEvent(event: HookEvent): void {
-    orchestrator.handleEvent(event);
     sessionCollector.recordHookEvent(event);
 
     if (event.type === 'tool_start' || event.type === 'tool_end') {
       toolCount += 1;
-      const lines = formatHookToolLines(event);
-      for (const line of lines) {
-        mcpPane.appendLine(line);
-      }
-      if (event.serverName && activeTab !== 1) {
-        activeTab = 1;
+      const ap = activeAgentPane();
+      if (ap) {
+        const lines = formatHookToolLines(event);
+        for (const line of lines) {
+          ap.appendLine(line);
+        }
       }
       return;
     }
@@ -611,50 +527,11 @@ async function main(): Promise<void> {
       agentPanes.get(id)?.renderTo(screen);
     }
 
-    if (activeTab === 3) {
-      orchestratorPane.clear();
-      for (const line of orchestrator.render()) {
-        orchestratorPane.appendLine(line);
-      }
-    }
-
-    if (activeTab === 4) {
-      browserPane.clear();
-      for (const line of webViewer.getLines()) {
-        browserPane.appendLine(line);
-      }
-    }
-
-    const tabBarRow = layout.tabBar.top;
-    const tabBarLeft = layout.tabBar.left;
-    const tabBarWidth = layout.tabBar.width;
-    if (tabBarWidth > 0) {
-      let tabStr = '';
-      for (let i = 0; i < TAB_NAMES.length; i++) {
-        const label = `${i + 1}:${TAB_NAMES[i]}`;
-        if (i === activeTab) {
-          tabStr += `${fg.main}\x1b[1m ${label} \x1b[0m`;
-        } else {
-          tabStr += `${fg.textDim} ${label} \x1b[0m`;
-        }
-        if (i < TAB_NAMES.length - 1) tabStr += `${fg.textDim}|`;
-      }
-      screen.writeAnsiString(tabBarRow, tabBarLeft, tabBarWidth, bg.headerBg + tabStr + '\x1b[0m');
-    }
-
-    const activePane = tabPanes[activeTab];
-    if (activePane) {
-      activePane.renderTo(screen);
-    }
-
     const inputRow = r - 1;
-    const leftWidth = layout.input.width;
     if (panelMode) {
-      const hint = `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane 1-5=tab esc=back\x1b[0m`;
-      screen.writeAnsiString(inputRow, 0, leftWidth, hint);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane esc=back\x1b[0m`);
     } else {
-      const prompt = `${fg.textDim}${icons.dot} passthrough\x1b[0m`;
-      screen.writeAnsiString(inputRow, 0, leftWidth, prompt);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.textDim}${icons.dot} passthrough\x1b[0m`);
     }
 
     screen.flush(process.stdout);
@@ -689,11 +566,6 @@ async function main(): Promise<void> {
     }
 
     if (panelMode) {
-      if (key >= '1' && key <= '5') {
-        activeTab = parseInt(key) - 1;
-        return;
-      }
-
       if (key === 'q') {
         cleanup();
         process.exit(0);
@@ -789,12 +661,6 @@ async function main(): Promise<void> {
   fileWatcher.onChange((event) => {
     fileCount += 1;
     sessionCollector.recordFileChange(event.filePath, event.changeType);
-    const opLabel = event.changeType === 'A'
-      ? fg.success + '+'
-      : event.changeType === 'D'
-      ? fg.error + '-'
-      : fg.main + 'M';
-    filesPane.appendLine(`${opLabel}\x1b[0m ${event.filePath}`);
   });
 
   try {
@@ -812,7 +678,6 @@ async function main(): Promise<void> {
 
   ptyManager.onExit((code: number) => {
     if (renderIntervalId !== null) clearInterval(renderIntervalId);
-    mcpPane.appendLine(`${fg.textDim}Process exited (${code})\x1b[0m`);
     renderFrame();
     setTimeout(() => {
       cleanup();

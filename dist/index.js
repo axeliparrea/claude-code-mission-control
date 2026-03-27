@@ -907,132 +907,71 @@ function createParser() {
 }
 
 // src/layout.ts
-var RIGHT_COLUMN_MIN_COLS = 30;
-var RIGHT_COLUMN_RATIO = 0.35;
 var COMPACT_COLS_THRESHOLD = 60;
 var COMPACT_ROWS_THRESHOLD = 15;
 function zeroRect() {
   return { left: 0, top: 0, width: 0, height: 0 };
 }
-function splitRightColumn(rightLeft, rightTop, rightWidth, rightHeight) {
-  const third = Math.floor(rightHeight / 3);
-  const remainder = rightHeight - third * 3;
-  const thinking = {
-    left: rightLeft,
-    top: rightTop,
-    width: rightWidth,
-    height: third
-  };
-  const mcp = {
-    left: rightLeft,
-    top: rightTop + third,
-    width: rightWidth,
-    height: third
-  };
-  const files = {
-    left: rightLeft,
-    top: rightTop + third * 2,
-    width: rightWidth,
-    height: third + remainder
-  };
-  return [thinking, mcp, files];
-}
-function calculateLayout(cols, rows, state, agentCount) {
-  const isCompact = state === "compact" || cols < COMPACT_COLS_THRESHOLD || rows < COMPACT_ROWS_THRESHOLD;
-  const header = { left: 0, top: 0, width: cols, height: 1 };
-  if (isCompact) {
-    const main3 = {
-      left: 0,
-      top: 1,
-      width: cols,
-      height: Math.max(1, rows - 2)
-    };
-    const input2 = {
-      left: 0,
-      top: rows - 1,
-      width: cols,
-      height: 1
-    };
-    return {
-      header,
-      main: main3,
-      thinking: zeroRect(),
-      mcp: zeroRect(),
-      files: zeroRect(),
-      agents: [],
-      input: input2,
-      rightTab: zeroRect(),
-      tabBar: zeroRect()
-    };
-  }
-  const ratio = cols < 120 ? 0.28 : RIGHT_COLUMN_RATIO;
-  const rightWidth = Math.max(RIGHT_COLUMN_MIN_COLS, Math.floor(cols * ratio));
-  const leftWidth = cols - rightWidth;
-  const rightTop = 1;
-  const rightHeight = rows - 1;
-  const [thinking, mcp, files] = splitRightColumn(leftWidth, rightTop, rightWidth, rightHeight);
-  const tabBar = { left: leftWidth, top: 1, width: rightWidth, height: 1 };
-  const rightTab = { left: leftWidth, top: 2, width: rightWidth, height: rows - 2 };
-  const input = {
-    left: 0,
-    top: rows - 1,
-    width: leftWidth,
-    height: 1
-  };
-  const leftContentTop = 1;
-  const leftContentBottom = rows - 2;
-  const leftContentHeight = leftContentBottom - leftContentTop + 1;
-  if (state === "solo" || agentCount === 0) {
-    const main3 = {
-      left: 0,
-      top: leftContentTop,
-      width: leftWidth,
-      height: leftContentHeight
-    };
-    return { header, main: main3, thinking, mcp, files, agents: [], input, rightTab, tabBar };
-  }
-  if (state === "single" || agentCount === 1) {
-    const agentHeight = Math.max(5, Math.floor(leftContentHeight * 0.35));
-    const mainHeight2 = leftContentHeight - agentHeight;
-    const main3 = {
-      left: 0,
-      top: leftContentTop,
-      width: leftWidth,
-      height: mainHeight2
-    };
-    const agent1 = {
-      left: 0,
-      top: leftContentTop + mainHeight2,
-      width: leftWidth,
-      height: agentHeight
-    };
-    return { header, main: main3, thinking, mcp, files, agents: [agent1], input, rightTab, tabBar };
-  }
-  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.5));
-  const mainHeight = leftContentHeight - agentAreaHeight;
-  const main2 = {
-    left: 0,
-    top: leftContentTop,
-    width: leftWidth,
-    height: mainHeight
-  };
-  const agentCols = Math.min(agentCount, 2);
+function buildAgentGrid(agentCount, left, top, width, height) {
+  if (agentCount === 0 || width < 4 || height < 3) return [];
+  const maxCols = width >= 120 ? 3 : width >= 60 ? 2 : 1;
+  const agentCols = Math.min(agentCount, maxCols);
   const agentRows = Math.ceil(agentCount / agentCols);
-  const agentColWidth = Math.floor(leftWidth / agentCols);
-  const agentRowHeight = Math.max(3, Math.floor(agentAreaHeight / agentRows));
-  const agentRects = [];
+  const colWidth = Math.floor(width / agentCols);
+  const rowHeight = Math.max(3, Math.floor(height / agentRows));
+  const rects = [];
   for (let i = 0; i < agentCount; i++) {
     const col = i % agentCols;
     const row = Math.floor(i / agentCols);
     const isLastCol = col === agentCols - 1;
-    agentRects.push({
-      left: col * agentColWidth,
-      top: leftContentTop + mainHeight + row * agentRowHeight,
-      width: isLastCol ? leftWidth - col * agentColWidth : agentColWidth,
-      height: row === agentRows - 1 ? agentAreaHeight - row * agentRowHeight : agentRowHeight
+    const isLastRow = row === agentRows - 1;
+    rects.push({
+      left: left + col * colWidth,
+      top: top + row * rowHeight,
+      width: isLastCol ? width - col * colWidth : colWidth,
+      height: isLastRow ? height - row * rowHeight : rowHeight
     });
   }
-  return { header, main: main2, thinking, mcp, files, agents: agentRects, input, rightTab, tabBar };
+  return rects;
+}
+function calculateLayout(cols, rows, state, agentCount) {
+  const isCompact = state === "compact" || cols < COMPACT_COLS_THRESHOLD || rows < COMPACT_ROWS_THRESHOLD;
+  const header = { left: 0, top: 0, width: cols, height: 1 };
+  const input = { left: 0, top: rows - 1, width: cols, height: 1 };
+  const empty = zeroRect();
+  const contentTop = 1;
+  const contentHeight = Math.max(1, rows - 2);
+  if (isCompact || agentCount === 0) {
+    const main3 = { left: 0, top: contentTop, width: cols, height: contentHeight };
+    return {
+      header,
+      main: main3,
+      thinking: empty,
+      mcp: empty,
+      files: empty,
+      agents: [],
+      input,
+      rightTab: empty,
+      tabBar: empty
+    };
+  }
+  const agentRatio = agentCount === 1 ? 0.35 : agentCount <= 3 ? 0.45 : 0.55;
+  const agentAreaHeight = Math.max(5, Math.floor(contentHeight * agentRatio));
+  const mainHeight = contentHeight - agentAreaHeight;
+  const main2 = { left: 0, top: contentTop, width: cols, height: mainHeight };
+  const agentTop = contentTop + mainHeight;
+  const agents = buildAgentGrid(agentCount, 0, agentTop, cols, agentAreaHeight);
+  return {
+    header,
+    main: main2,
+    thinking: empty,
+    mcp: empty,
+    files: empty,
+    agents,
+    input,
+    rightTab: empty,
+    tabBar: empty
+  };
 }
 
 // src/hooks/hook-server.ts
@@ -1458,352 +1397,6 @@ function createFileWatcher() {
   };
 }
 
-// src/theme.ts
-function hexToFg(hex) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `\x1B[38;2;${r};${g};${b}m`;
-}
-function hexToBg(hex) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `\x1B[48;2;${r};${g};${b}m`;
-}
-var palette = {
-  bg: "#0d1117",
-  headerBg: "#161b22",
-  borderDefault: "#21262d",
-  textPrimary: "#c9d1d9",
-  textSecondary: "#8b949e",
-  textDim: "#484f58",
-  main: "#58a6ff",
-  agent: "#bc8cff",
-  thinking: "#f0c050",
-  mcp: "#5dca7a",
-  files: "#f06080",
-  error: "#f85149",
-  success: "#5dca7a",
-  warning: "#f0c050"
-};
-var fg = {
-  bg: hexToFg(palette.bg),
-  headerBg: hexToFg(palette.headerBg),
-  borderDefault: hexToFg(palette.borderDefault),
-  textPrimary: hexToFg(palette.textPrimary),
-  textSecondary: hexToFg(palette.textSecondary),
-  textDim: hexToFg(palette.textDim),
-  main: hexToFg(palette.main),
-  agent: hexToFg(palette.agent),
-  thinking: hexToFg(palette.thinking),
-  mcp: hexToFg(palette.mcp),
-  files: hexToFg(palette.files),
-  error: hexToFg(palette.error),
-  success: hexToFg(palette.success),
-  warning: hexToFg(palette.warning)
-};
-var bg = {
-  bg: hexToBg(palette.bg),
-  headerBg: hexToBg(palette.headerBg),
-  borderDefault: hexToBg(palette.borderDefault),
-  textPrimary: hexToBg(palette.textPrimary),
-  textSecondary: hexToBg(palette.textSecondary),
-  textDim: hexToBg(palette.textDim),
-  main: hexToBg(palette.main),
-  agent: hexToBg(palette.agent),
-  thinking: hexToBg(palette.thinking),
-  mcp: hexToBg(palette.mcp),
-  files: hexToBg(palette.files),
-  error: hexToBg(palette.error),
-  success: hexToBg(palette.success),
-  warning: hexToBg(palette.warning)
-};
-var icons = {
-  success: "\u2713",
-  error: "\u2717",
-  pending: "\u27F3",
-  dot: "\u25CF",
-  arrow: "\u2192",
-  spawn: "\u229E"
-};
-
-// src/orchestrator.ts
-var RESET2 = "\x1B[0m";
-var BOLD = "\x1B[1m";
-var DIM = "\x1B[2m";
-function createOrchestrator() {
-  const agents = [];
-  const recentTools = [];
-  const MAX_RECENT_TOOLS = 20;
-  let totalTools = 0;
-  let sessionStart = Date.now();
-  function addAgent(event) {
-    const agent = {
-      id: `agent-${agents.length + 1}`,
-      type: event.agentType ?? "unknown",
-      prompt: event.agentPrompt?.slice(0, 80) ?? "",
-      model: event.agentModel ?? "",
-      status: "running",
-      spawnedAt: event.timestamp,
-      toolCalls: 0
-    };
-    agents.push(agent);
-  }
-  function completeLastAgent(event) {
-    const running = agents.filter((a) => a.status === "running");
-    const last = running[running.length - 1];
-    if (last) {
-      last.status = event.toolSuccess === false ? "error" : "done";
-      last.completedAt = event.timestamp;
-      last.confidence = event.confidence;
-      last.output = event.agentOutput?.slice(0, 100);
-    }
-  }
-  function addToolCall(event) {
-    totalTools++;
-    const tool = {
-      name: event.toolName ?? "unknown",
-      status: "pending",
-      timestamp: event.timestamp
-    };
-    recentTools.push(tool);
-    if (recentTools.length > MAX_RECENT_TOOLS) {
-      recentTools.shift();
-    }
-    const running = agents.filter((a) => a.status === "running");
-    const current = running[running.length - 1];
-    if (current) {
-      current.toolCalls++;
-    }
-  }
-  function completeToolCall(event) {
-    const pending = recentTools.filter((t) => t.status === "pending" && t.name === event.toolName);
-    const match = pending[pending.length - 1];
-    if (match) {
-      match.status = event.toolSuccess === false ? "error" : "success";
-    }
-  }
-  function formatDuration(ms) {
-    const secs = Math.floor(ms / 1e3);
-    if (secs < 60) return `${secs}s`;
-    const mins = Math.floor(secs / 60);
-    const remainSecs = secs % 60;
-    return `${mins}m${remainSecs}s`;
-  }
-  function statusIcon(status) {
-    if (status === "running") return `${fg.success}${icons.pending}${RESET2}`;
-    if (status === "done") return `${fg.success}${icons.success}${RESET2}`;
-    if (status === "error") return `${fg.error}${icons.error}${RESET2}`;
-    if (status === "pending") return `${fg.thinking}${icons.pending}${RESET2}`;
-    if (status === "success") return `${fg.success}${icons.success}${RESET2}`;
-    return `${fg.textDim}?${RESET2}`;
-  }
-  function renderAgentTree() {
-    const lines = [];
-    lines.push(`${BOLD}${fg.agent} Agent Tree${RESET2}`);
-    if (agents.length === 0) {
-      lines.push(`${DIM}  (no agents spawned)${RESET2}`);
-      return lines;
-    }
-    for (let i = 0; i < agents.length; i++) {
-      const a = agents[i];
-      const isLast = i === agents.length - 1;
-      const connector = isLast ? "\u2514\u2500" : "\u251C\u2500";
-      const icon = statusIcon(a.status);
-      const duration = a.completedAt ? formatDuration(a.completedAt - a.spawnedAt) : formatDuration(Date.now() - a.spawnedAt);
-      const conf = a.confidence !== void 0 ? ` ${fg.textDim}${a.confidence}%${RESET2}` : "";
-      const model = a.model ? ` ${fg.textDim}(${a.model})${RESET2}` : "";
-      lines.push(`  ${connector} ${icon} ${fg.agent}${a.type}${RESET2}${model} ${fg.textDim}${duration}${RESET2}${conf}`);
-      if (a.prompt) {
-        const subConnector = isLast ? "   " : "\u2502  ";
-        lines.push(`  ${subConnector} ${fg.textDim}${icons.arrow} ${a.prompt}${RESET2}`);
-      }
-      if (a.toolCalls > 0) {
-        const subConnector = isLast ? "   " : "\u2502  ";
-        lines.push(`  ${subConnector} ${fg.textDim}${a.toolCalls} tools${RESET2}`);
-      }
-      if (a.output && a.status === "done") {
-        const subConnector = isLast ? "   " : "\u2502  ";
-        lines.push(`  ${subConnector} ${fg.success}${a.output}${RESET2}`);
-      }
-    }
-    return lines;
-  }
-  function renderToolFeed() {
-    const lines = [];
-    lines.push("");
-    lines.push(`${BOLD}${fg.mcp} Recent Tools${RESET2} ${fg.textDim}(${totalTools} total)${RESET2}`);
-    if (recentTools.length === 0) {
-      lines.push(`${DIM}  (no tool calls yet)${RESET2}`);
-      return lines;
-    }
-    const visible = recentTools.slice(-10);
-    for (const t of visible) {
-      lines.push(`  ${statusIcon(t.status)} ${t.name}`);
-    }
-    return lines;
-  }
-  function renderStats() {
-    const elapsed = formatDuration(Date.now() - sessionStart);
-    const activeCount = agents.filter((a) => a.status === "running").length;
-    const doneCount = agents.filter((a) => a.status === "done").length;
-    const errorCount = agents.filter((a) => a.status === "error").length;
-    const lines = [];
-    lines.push("");
-    lines.push(`${BOLD}${fg.textPrimary} Session${RESET2}`);
-    lines.push(`  ${fg.textDim}Duration:${RESET2} ${elapsed}`);
-    lines.push(`  ${fg.textDim}Agents:${RESET2} ${fg.success}${activeCount} running${RESET2} ${fg.textDim}${doneCount} done${RESET2}${errorCount > 0 ? ` ${fg.error}${errorCount} error${RESET2}` : ""}`);
-    lines.push(`  ${fg.textDim}Tools:${RESET2} ${totalTools} total`);
-    return lines;
-  }
-  return {
-    handleEvent(event) {
-      if (event.type === "agent_spawn") {
-        addAgent(event);
-      } else if (event.type === "agent_done") {
-        completeLastAgent(event);
-      } else if (event.type === "tool_start") {
-        addToolCall(event);
-      } else if (event.type === "tool_end") {
-        completeToolCall(event);
-      }
-    },
-    render() {
-      return [
-        ...renderAgentTree(),
-        ...renderToolFeed(),
-        ...renderStats()
-      ];
-    },
-    get activeAgentCount() {
-      return agents.filter((a) => a.status === "running").length;
-    },
-    get totalToolCalls() {
-      return totalTools;
-    }
-  };
-}
-
-// src/web-viewer.ts
-var RESET3 = "\x1B[0m";
-var BOLD2 = "\x1B[1m";
-var DIM2 = "\x1B[2m";
-var UNDERLINE = "\x1B[4m";
-function htmlToText(html) {
-  let text = html;
-  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-  text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-  text = text.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "");
-  text = text.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "");
-  text = text.replace(/<h1[^>]*>(.*?)<\/h1>/gi, `
-${BOLD2}$1${RESET3}
-`);
-  text = text.replace(/<h2[^>]*>(.*?)<\/h2>/gi, `
-${BOLD2}$1${RESET3}
-`);
-  text = text.replace(/<h3[^>]*>(.*?)<\/h3>/gi, `
-${BOLD2}$1${RESET3}
-`);
-  text = text.replace(/<h[4-6][^>]*>(.*?)<\/h[4-6]>/gi, `
-$1
-`);
-  text = text.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, `${UNDERLINE}$2${RESET3} ${DIM2}($1)${RESET3}`);
-  text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, "  - $1\n");
-  text = text.replace(/<br\s*\/?>/gi, "\n");
-  text = text.replace(/<\/p>/gi, "\n");
-  text = text.replace(/<\/div>/gi, "\n");
-  text = text.replace(/<\/tr>/gi, "\n");
-  text = text.replace(/<code[^>]*>(.*?)<\/code>/gi, `${fg.mcp}$1${RESET3}`);
-  text = text.replace(/<pre[^>]*>(.*?)<\/pre>/gis, `
-${fg.textDim}$1${RESET3}
-`);
-  text = text.replace(/<strong[^>]*>(.*?)<\/strong>/gi, `${BOLD2}$1${RESET3}`);
-  text = text.replace(/<b[^>]*>(.*?)<\/b>/gi, `${BOLD2}$1${RESET3}`);
-  text = text.replace(/<em[^>]*>(.*?)<\/em>/gi, `$1`);
-  text = text.replace(/<[^>]+>/g, "");
-  text = text.replace(/&amp;/g, "&");
-  text = text.replace(/&lt;/g, "<");
-  text = text.replace(/&gt;/g, ">");
-  text = text.replace(/&quot;/g, '"');
-  text = text.replace(/&#39;/g, "'");
-  text = text.replace(/&nbsp;/g, " ");
-  const lines = text.split("\n").map((l) => l.trim()).filter((l, i, arr) => !(l === "" && arr[i - 1] === ""));
-  return lines;
-}
-function createWebViewer() {
-  let lines = [`${DIM2}  Type a URL to browse${RESET3}`, `${DIM2}  Example: https://docs.anthropic.com${RESET3}`];
-  let currentUrl = "";
-  let loading = false;
-  const urlHistory = [];
-  return {
-    async fetch(url) {
-      let normalizedUrl = url.trim();
-      if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
-        normalizedUrl = "https://" + normalizedUrl;
-      }
-      currentUrl = normalizedUrl;
-      loading = true;
-      lines = [`${fg.thinking}${icons.pending} Loading ${normalizedUrl}...${RESET3}`];
-      try {
-        const response = await globalThis.fetch(normalizedUrl, {
-          headers: { "User-Agent": "Claude-Mission-Control/0.1" },
-          signal: AbortSignal.timeout(1e4)
-        });
-        if (!response.ok) {
-          lines = [
-            `${fg.error}${icons.error} HTTP ${response.status} ${response.statusText}${RESET3}`,
-            `${DIM2}  URL: ${normalizedUrl}${RESET3}`
-          ];
-          loading = false;
-          return;
-        }
-        const contentType = response.headers.get("content-type") ?? "";
-        if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-          lines = [
-            `${fg.thinking}${icons.arrow} ${contentType}${RESET3}`,
-            `${DIM2}  Content type not supported for text rendering${RESET3}`,
-            `${DIM2}  URL: ${normalizedUrl}${RESET3}`
-          ];
-          loading = false;
-          return;
-        }
-        const html = await response.text();
-        const titleMatch = /<title[^>]*>(.*?)<\/title>/i.exec(html);
-        const title = titleMatch?.[1]?.trim() ?? normalizedUrl;
-        const textLines = htmlToText(html);
-        lines = [
-          `${BOLD2}${fg.main}${title}${RESET3}`,
-          `${DIM2}${normalizedUrl}${RESET3}`,
-          "",
-          ...textLines
-        ];
-        urlHistory.push(normalizedUrl);
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        lines = [
-          `${fg.error}${icons.error} Failed to fetch${RESET3}`,
-          `${DIM2}  ${errMsg}${RESET3}`,
-          `${DIM2}  URL: ${normalizedUrl}${RESET3}`
-        ];
-      }
-      loading = false;
-    },
-    getLines() {
-      return lines;
-    },
-    get currentUrl() {
-      return currentUrl;
-    },
-    get loading() {
-      return loading;
-    },
-    get history() {
-      return [...urlHistory];
-    }
-  };
-}
-
 // src/memory/project-memory.ts
 import * as fs4 from "fs";
 import * as path4 from "path";
@@ -2221,11 +1814,80 @@ ${changelog}`);
   };
 }
 
+// src/theme.ts
+function hexToFg(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `\x1B[38;2;${r};${g};${b}m`;
+}
+function hexToBg(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `\x1B[48;2;${r};${g};${b}m`;
+}
+var palette = {
+  bg: "#0d1117",
+  headerBg: "#161b22",
+  borderDefault: "#21262d",
+  textPrimary: "#c9d1d9",
+  textSecondary: "#8b949e",
+  textDim: "#484f58",
+  main: "#58a6ff",
+  agent: "#bc8cff",
+  thinking: "#f0c050",
+  mcp: "#5dca7a",
+  files: "#f06080",
+  error: "#f85149",
+  success: "#5dca7a",
+  warning: "#f0c050"
+};
+var fg = {
+  bg: hexToFg(palette.bg),
+  headerBg: hexToFg(palette.headerBg),
+  borderDefault: hexToFg(palette.borderDefault),
+  textPrimary: hexToFg(palette.textPrimary),
+  textSecondary: hexToFg(palette.textSecondary),
+  textDim: hexToFg(palette.textDim),
+  main: hexToFg(palette.main),
+  agent: hexToFg(palette.agent),
+  thinking: hexToFg(palette.thinking),
+  mcp: hexToFg(palette.mcp),
+  files: hexToFg(palette.files),
+  error: hexToFg(palette.error),
+  success: hexToFg(palette.success),
+  warning: hexToFg(palette.warning)
+};
+var bg = {
+  bg: hexToBg(palette.bg),
+  headerBg: hexToBg(palette.headerBg),
+  borderDefault: hexToBg(palette.borderDefault),
+  textPrimary: hexToBg(palette.textPrimary),
+  textSecondary: hexToBg(palette.textSecondary),
+  textDim: hexToBg(palette.textDim),
+  main: hexToBg(palette.main),
+  agent: hexToBg(palette.agent),
+  thinking: hexToBg(palette.thinking),
+  mcp: hexToBg(palette.mcp),
+  files: hexToBg(palette.files),
+  error: hexToBg(palette.error),
+  success: hexToBg(palette.success),
+  warning: hexToBg(palette.warning)
+};
+var icons = {
+  success: "\u2713",
+  error: "\u2717",
+  pending: "\u27F3",
+  dot: "\u25CF",
+  arrow: "\u2192",
+  spawn: "\u229E"
+};
+
 // src/index.ts
-var TAB_NAMES = ["Think", "Tools", "Files", "Orch", "Web"];
 var RENDER_INTERVAL_MS = 33;
 var WINDOWS_RESIZE_POLL_MS = 500;
-var MAX_VISIBLE_AGENT_PANES = 4;
+var MAX_VISIBLE_AGENT_PANES = 6;
 var DOUBLE_CTRLC_MS = 500;
 function enterAlternateScreen() {
   process.stdout.write("\x1B[?1049h");
@@ -2244,12 +1906,6 @@ function termSize() {
     cols: process.stdout.columns ?? 80,
     rows: process.stdout.rows ?? 24
   };
-}
-function formatFileChange(chunk) {
-  const opLabel = chunk.fileOp === "A" ? fg.success + "+" : chunk.fileOp === "D" ? fg.error + "-" : fg.main + "M";
-  const filePath = chunk.filePath ?? "";
-  const reset = "\x1B[0m";
-  return `${opLabel}${reset} ${filePath}`;
 }
 function truncate(s, max) {
   const clean = s.replace(/[\n\r]+/g, " ").trim();
@@ -2274,25 +1930,25 @@ function formatHookToolLines(event) {
   });
   const name = event.toolName ?? "tool";
   const isMcp = event.serverName && event.serverName.length > 0;
-  const RESET4 = "\x1B[0m";
+  const RESET2 = "\x1B[0m";
   if (event.type === "tool_start") {
-    const icon = `${fg.thinking}${icons.pending}${RESET4}`;
-    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET4}` : "";
-    lines.push(`${icon} ${fg.textPrimary}${name}${RESET4}${serverBadge} ${fg.textDim}${time}${RESET4}`);
+    const icon = `${fg.thinking}${icons.pending}${RESET2}`;
+    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET2}` : "";
+    lines.push(`${icon} ${fg.textPrimary}${name}${RESET2}${serverBadge} ${fg.textDim}${time}${RESET2}`);
     const inputPreview = previewValue(event.toolInput);
     if (inputPreview) {
-      lines.push(`  ${fg.textDim}${icons.arrow} ${inputPreview}${RESET4}`);
+      lines.push(`  ${fg.textDim}${icons.arrow} ${inputPreview}${RESET2}`);
     }
   }
   if (event.type === "tool_end") {
     const success = event.toolSuccess !== false;
-    const icon = success ? `${fg.success}${icons.success}${RESET4}` : `${fg.error}${icons.error}${RESET4}`;
-    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET4}` : "";
-    lines.push(`${icon} ${fg.textPrimary}${name}${RESET4}${serverBadge} ${fg.textDim}${time}${RESET4}`);
+    const icon = success ? `${fg.success}${icons.success}${RESET2}` : `${fg.error}${icons.error}${RESET2}`;
+    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET2}` : "";
+    lines.push(`${icon} ${fg.textPrimary}${name}${RESET2}${serverBadge} ${fg.textDim}${time}${RESET2}`);
     const outputPreview = previewValue(event.toolOutput);
     if (outputPreview) {
       const color = success ? fg.textDim : fg.error;
-      lines.push(`  ${color}${icons.arrow} ${outputPreview}${RESET4}`);
+      lines.push(`  ${color}${icons.arrow} ${outputPreview}${RESET2}`);
     }
   }
   return lines;
@@ -2311,13 +1967,13 @@ function findEvictableAgent(agents) {
 function buildHeaderContent(agentCount, toolCount, fileCount, hookConnected) {
   const dot = fg.error + icons.dot + "\x1B[0m";
   const greenDot = fg.success + icons.dot + "\x1B[0m";
-  const title = fg.textPrimary + " Claude Mission Control\x1B[0m";
-  const agentsBadge = ` ${greenDot} ${fg.textSecondary}${agentCount} agents\x1B[0m`;
+  const title = fg.textPrimary + " Mission Control\x1B[0m";
+  const agentsBadge = agentCount > 0 ? ` ${greenDot} ${fg.success}${agentCount} agents\x1B[0m` : ` ${fg.textDim}0 agents\x1B[0m`;
   const toolsBadge = ` ${fg.textDim}${toolCount} tools\x1B[0m`;
-  const filesBadge = ` ${fg.textDim}${fileCount} files\x1B[0m`;
-  const hookBadge = hookConnected ? ` ${fg.success}hooks${"\x1B[0m"}` : ` ${fg.textDim}hooks:off${"\x1B[0m"}`;
-  const keybinds = ` ${fg.textDim}esc=panels 1-5=tabs q=quit\x1B[0m`;
-  return ` ${dot}${title} \u2502${agentsBadge} \u2502${toolsBadge} \u2502${filesBadge} \u2502${hookBadge} \u2502${keybinds}`;
+  const filesBadge = fileCount > 0 ? ` ${fg.textDim}${fileCount} files\x1B[0m` : "";
+  const hookBadge = hookConnected ? ` ${fg.success}hooks\x1B[0m` : "";
+  const keybinds = ` ${fg.textDim}esc=scroll q=quit\x1B[0m`;
+  return ` ${dot}${title} \u2502${agentsBadge} \u2502${toolsBadge}${filesBadge}${hookBadge} \u2502${keybinds}`;
 }
 function resolveWorkingDir() {
   const args = process.argv.slice(2);
@@ -2368,45 +2024,6 @@ async function main() {
     layout.main,
     fg.main
   );
-  const thinkingPane = createTextPane(
-    "thinking",
-    "Thinking",
-    layout.rightTab,
-    fg.thinking,
-    200
-  );
-  const mcpPane = createTextPane(
-    "mcp",
-    "Tools",
-    layout.rightTab,
-    fg.mcp,
-    300
-  );
-  const filesPane = createTextPane(
-    "files",
-    "Files",
-    layout.rightTab,
-    fg.files,
-    50
-  );
-  const orchestratorPane = createTextPane(
-    "orchestrator",
-    "Orchestrator",
-    layout.rightTab,
-    fg.agent,
-    500
-  );
-  const browserPane = createTextPane(
-    "browser",
-    "Browser",
-    layout.rightTab,
-    fg.main,
-    1e3
-  );
-  const orchestrator = createOrchestrator();
-  const webViewer = createWebViewer();
-  let activeTab = 0;
-  const tabPanes = [thinkingPane, mcpPane, filesPane, orchestratorPane, browserPane];
   const agents = /* @__PURE__ */ new Map();
   const agentPanes = /* @__PURE__ */ new Map();
   const agentSlotOrder = [];
@@ -2424,7 +2041,6 @@ async function main() {
       const pane = agentPanes.get(id);
       if (pane) panes.push(pane);
     }
-    panes.push(thinkingPane);
     return panes;
   }
   function applyFocus() {
@@ -2439,11 +2055,6 @@ async function main() {
     screen.resize(c, r);
     layout = calculateLayout(c, r, layoutState, agentSlotOrder.length);
     mainPane.resize(layout.main);
-    thinkingPane.rect = layout.rightTab;
-    mcpPane.rect = layout.rightTab;
-    filesPane.rect = layout.rightTab;
-    orchestratorPane.rect = layout.rightTab;
-    browserPane.rect = layout.rightTab;
     layout.agents.forEach((rect, index) => {
       const agentId = agentSlotOrder[index];
       if (agentId) {
@@ -2495,19 +2106,6 @@ async function main() {
   function routeChunk(chunk) {
     sessionCollector.recordChunk(chunk);
     if (chunk.type === "thinking") {
-      const effortMatch = /\(thinking with (\w+) effort\)/i.exec(chunk.clean);
-      const verbMatch = /^\s*[*·•]\s*(\w+)/i.exec(chunk.clean);
-      const durationMatch = /cogitated for (\d+s?)/i.exec(chunk.clean);
-      if (durationMatch) {
-        thinkingPane.appendLine(`${fg.success}${icons.success} Done${fg.textDim} (${durationMatch[1]})\x1B[0m`);
-      } else if (verbMatch) {
-        const verb = verbMatch[1] ?? "Thinking";
-        const effort = effortMatch ? ` ${fg.textDim}[${effortMatch[1]}]\x1B[0m` : "";
-        const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        thinkingPane.appendLine(`${fg.thinking}${icons.pending} ${verb}...${effort} ${fg.textDim}${time}\x1B[0m`);
-      } else {
-        thinkingPane.appendLine(`${fg.thinking}${chunk.clean}\x1B[0m`);
-      }
       return;
     }
     if (chunk.type === "agent") {
@@ -2532,38 +2130,25 @@ async function main() {
     }
     if (chunk.type === "mcp") {
       toolCount += 1;
-      const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      });
       const icon = chunk.toolStatus === "success" ? `${fg.success}${icons.success}\x1B[0m` : chunk.toolStatus === "error" ? `${fg.error}${icons.error}\x1B[0m` : `${fg.thinking}${icons.pending}\x1B[0m`;
       const name = chunk.toolName ?? "tool";
       const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1B[0m` : "";
-      const toolLine = `${icon} ${name}${server}`;
-      mcpPane.appendLine(`${toolLine} ${fg.textDim}${time}\x1B[0m`);
-      if (chunk.clean && chunk.clean.length > 20) {
-        mcpPane.appendLine(`  ${fg.textDim}${icons.arrow} ${truncate(chunk.clean, 60)}\x1B[0m`);
-      }
       const ap = activeAgentPane();
       if (ap) {
-        ap.appendLine(`${toolLine}`);
+        ap.appendLine(`${icon} ${name}${server}`);
       }
       return;
     }
     if (chunk.type === "file") {
       fileCount += 1;
-      filesPane.appendLine(formatFileChange(chunk));
       const ap = activeAgentPane();
       if (ap) {
-        const label = chunk.fileOp === "A" ? "+" : chunk.fileOp === "D" ? "-" : "M";
-        ap.appendLine(`${fg.textDim}${label} ${chunk.filePath ?? ""}\x1B[0m`);
+        const label = chunk.fileOp === "A" ? `${fg.success}+` : chunk.fileOp === "D" ? `${fg.error}-` : `${fg.main}M`;
+        ap.appendLine(`${label}\x1B[0m ${chunk.filePath ?? ""}`);
       }
       return;
     }
     if (chunk.type === "error") {
-      mcpPane.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1B[0m`);
       const ap = activeAgentPane();
       if (ap) {
         ap.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1B[0m`);
@@ -2581,16 +2166,15 @@ async function main() {
     }
   }
   function routeHookEvent(event) {
-    orchestrator.handleEvent(event);
     sessionCollector.recordHookEvent(event);
     if (event.type === "tool_start" || event.type === "tool_end") {
       toolCount += 1;
-      const lines = formatHookToolLines(event);
-      for (const line of lines) {
-        mcpPane.appendLine(line);
-      }
-      if (event.serverName && activeTab !== 1) {
-        activeTab = 1;
+      const ap = activeAgentPane();
+      if (ap) {
+        const lines = formatHookToolLines(event);
+        for (const line of lines) {
+          ap.appendLine(line);
+        }
       }
       return;
     }
@@ -2633,46 +2217,11 @@ async function main() {
     for (const id of agentSlotOrder) {
       agentPanes.get(id)?.renderTo(screen);
     }
-    if (activeTab === 3) {
-      orchestratorPane.clear();
-      for (const line of orchestrator.render()) {
-        orchestratorPane.appendLine(line);
-      }
-    }
-    if (activeTab === 4) {
-      browserPane.clear();
-      for (const line of webViewer.getLines()) {
-        browserPane.appendLine(line);
-      }
-    }
-    const tabBarRow = layout.tabBar.top;
-    const tabBarLeft = layout.tabBar.left;
-    const tabBarWidth = layout.tabBar.width;
-    if (tabBarWidth > 0) {
-      let tabStr = "";
-      for (let i = 0; i < TAB_NAMES.length; i++) {
-        const label = `${i + 1}:${TAB_NAMES[i]}`;
-        if (i === activeTab) {
-          tabStr += `${fg.main}\x1B[1m ${label} \x1B[0m`;
-        } else {
-          tabStr += `${fg.textDim} ${label} \x1B[0m`;
-        }
-        if (i < TAB_NAMES.length - 1) tabStr += `${fg.textDim}|`;
-      }
-      screen.writeAnsiString(tabBarRow, tabBarLeft, tabBarWidth, bg.headerBg + tabStr + "\x1B[0m");
-    }
-    const activePane = tabPanes[activeTab];
-    if (activePane) {
-      activePane.renderTo(screen);
-    }
     const inputRow = r - 1;
-    const leftWidth = layout.input.width;
     if (panelMode) {
-      const hint = `${fg.main}[PANEL]${fg.textDim} \u2191\u2193=scroll tab=pane 1-5=tab esc=back\x1B[0m`;
-      screen.writeAnsiString(inputRow, 0, leftWidth, hint);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} \u2191\u2193=scroll tab=pane esc=back\x1B[0m`);
     } else {
-      const prompt = `${fg.textDim}${icons.dot} passthrough\x1B[0m`;
-      screen.writeAnsiString(inputRow, 0, leftWidth, prompt);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.textDim}${icons.dot} passthrough\x1B[0m`);
     }
     screen.flush(process.stdout);
   }
@@ -2697,10 +2246,6 @@ async function main() {
       return;
     }
     if (panelMode) {
-      if (key >= "1" && key <= "5") {
-        activeTab = parseInt(key) - 1;
-        return;
-      }
       if (key === "q") {
         cleanup();
         process.exit(0);
@@ -2801,8 +2346,6 @@ async function main() {
   fileWatcher.onChange((event) => {
     fileCount += 1;
     sessionCollector.recordFileChange(event.filePath, event.changeType);
-    const opLabel = event.changeType === "A" ? fg.success + "+" : event.changeType === "D" ? fg.error + "-" : fg.main + "M";
-    filesPane.appendLine(`${opLabel}\x1B[0m ${event.filePath}`);
   });
   try {
     fileWatcher.start(cwd);
@@ -2817,7 +2360,6 @@ async function main() {
   });
   ptyManager.onExit((code) => {
     if (renderIntervalId !== null) clearInterval(renderIntervalId);
-    mcpPane.appendLine(`${fg.textDim}Process exited (${code})\x1B[0m`);
     renderFrame();
     setTimeout(() => {
       cleanup();

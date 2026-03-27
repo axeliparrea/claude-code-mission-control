@@ -712,10 +712,12 @@ async function main(): Promise<void> {
   process.stdin.on('data', handleKeyInput);
 
   process.stdout.on('resize', () => {
+    process.stdout.write('\x1b[2J');
     recalculateLayout();
     const contentCols = Math.max(1, layout.main.width - 2);
     const contentRows = Math.max(1, layout.main.height - 2);
     ptyManager.resize(contentCols, contentRows);
+    renderFrame();
   });
 
   if (process.platform === 'win32') {

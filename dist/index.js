@@ -421,6 +421,11 @@ var ScreenBufferImpl = class {
     this.rows = rows;
     this.cells = makeCellGrid(cols, rows);
     this.prev = makeCellGrid(cols, rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        this.prev[r][c].char = "\0";
+      }
+    }
   }
 };
 function createScreenBuffer(cols, rows) {
@@ -2510,10 +2515,12 @@ async function main() {
   process.stdin.resume();
   process.stdin.on("data", handleKeyInput);
   process.stdout.on("resize", () => {
+    process.stdout.write("\x1B[2J");
     recalculateLayout();
     const contentCols2 = Math.max(1, layout.main.width - 2);
     const contentRows2 = Math.max(1, layout.main.height - 2);
     ptyManager.resize(contentCols2, contentRows2);
+    renderFrame();
   });
   if (process.platform === "win32") {
     let lastCols = cols;

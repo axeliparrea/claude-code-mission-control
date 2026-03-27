@@ -299,17 +299,17 @@ describe('createScreenBuffer', () => {
     expect(screen.rows).toBe(40);
   });
 
-  it('resize clears all existing cell data', () => {
+  it('resize forces full redraw on next flush', () => {
     const screen = createScreenBuffer(10, 5);
     screen.put(0, 0, 'X');
     const { stream: s1 } = makeMockStream();
     screen.flush(s1);
 
     screen.resize(10, 5);
-    // After resize, prev grid is also fresh — no diff to emit
+    screen.clear();
     const { stream: s2, getOutput: getOut2 } = makeMockStream();
     screen.flush(s2);
-    expect(getOut2()).toBe('');
+    expect(getOut2().length).toBeGreaterThan(0);
   });
 
   it('resize allows writing to new larger dimensions', () => {

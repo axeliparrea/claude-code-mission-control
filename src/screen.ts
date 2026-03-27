@@ -272,6 +272,11 @@ export class ScreenBufferImpl implements ScreenBuffer {
     this.rows = rows;
     this.cells = makeCellGrid(cols, rows);
     this.prev = makeCellGrid(cols, rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        this.prev[r]![c]!.char = '\x00';
+      }
+    }
   }
 }
 

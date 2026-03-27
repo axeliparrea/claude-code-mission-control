@@ -1994,10 +1994,41 @@ function createSessionCollector(memory) {
   }
   function buildAgentSummary() {
     if (agentRecords.length === 0) return "";
+    const succeeded = agentRecords.filter((a) => a.status === "success").length;
+    const failed = agentRecords.filter((a) => a.status === "error").length;
+    const running = agentRecords.filter((a) => a.status === "running").length;
     const lines = [];
-    for (const agent of agentRecords) {
-      const outputPreview = agent.output.slice(-3).join("; ").slice(0, 150);
-      lines.push(`- ${agent.type}: ${agent.prompt.slice(0, 100)}${outputPreview ? " \u2192 " + outputPreview : ""}`);
+    lines.push(`Agents: ${agentRecords.length} total (${succeeded} success, ${failed} failed${running > 0 ? `, ${running} interrupted` : ""})`);
+    for (let i = 0; i < agentRecords.length; i++) {
+      const a = agentRecords[i];
+      const num = i + 1;
+      const statusIcon = a.status === "success" ? "OK" : a.status === "error" ? "FAIL" : "??";
+      const result = a.output.slice(-1)[0]?.slice(0, 120) ?? "";
+      lines.push(`  #${num} ${a.type} [${statusIcon}] (${a.toolCount} tools)`);
+      lines.push(`     Task: ${a.prompt.slice(0, 120)}`);
+      if (a.filesEdited.length > 0) {
+        lines.push(`     Files: ${a.filesEdited.slice(0, 5).join(", ")}`);
+      }
+      if (result) {
+        lines.push(`     Result: ${result}`);
+      }
+      if (a.errors.length > 0) {
+        lines.push(`     Errors: ${a.errors.slice(0, 3).join("; ")}`);
+      }
+    }
+    return lines.join("\n");
+  }
+  function buildErrorLessons() {
+    const allErrors = [
+      ...errorMessages.map((e) => ({ source: "session", msg: e })),
+      ...agentRecords.flatMap((a) => a.errors.map((e) => ({ source: a.type, msg: e })))
+    ];
+    if (allErrors.length === 0) return "";
+    const unique = [...new Map(allErrors.map((e) => [e.msg.slice(0, 50), e])).values()];
+    const lines = [];
+    lines.push(`Errors to learn from (${unique.length}):`);
+    for (const err of unique.slice(0, 10)) {
+      lines.push(`- [${err.source}] ${err.msg.slice(0, 120)}`);
     }
     return lines.join("\n");
   }
@@ -2007,28 +2038,24 @@ function createSessionCollector(memory) {
     const secs = duration % 60;
     const durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
     const sections = [];
-    sections.push(`Duration: ${durationStr}`);
+    sections.push(`Duration: ${durationStr} | Tools: ${toolCalls} | Files: ${fileChanges.length} | Errors: ${errors}`);
     if (conversationLines.length > 0) {
-      const topics = conversationLines.slice(0, 5).map((l) => l.slice(0, 100));
-      sections.push(`What was discussed:
+      const topics = conversationLines.slice(0, 5).map((l) => l.slice(0, 120));
+      sections.push(`What was done:
 ${topics.map((t) => `- ${t}`).join("\n")}`);
+    }
+    const agentSummary = buildAgentSummary();
+    if (agentSummary) {
+      sections.push(agentSummary);
     }
     const changelog = buildChangelog();
     if (changelog !== "No file changes") {
       sections.push(`File changes:
 ${changelog}`);
     }
-    const agentSummary = buildAgentSummary();
-    if (agentSummary) {
-      sections.push(`Agents used:
-${agentSummary}`);
-    }
-    if (toolCalls > 0) {
-      sections.push(`Tools: ${toolCalls} calls (${[...toolNames].slice(0, 8).join(", ")})`);
-    }
-    if (errorMessages.length > 0) {
-      sections.push(`Errors:
-${errorMessages.slice(0, 5).map((e) => `- ${e.slice(0, 100)}`).join("\n")}`);
+    const errorLessons = buildErrorLessons();
+    if (errorLessons) {
+      sections.push(errorLessons);
     }
     return sections.join("\n\n");
   }
@@ -2038,23 +2065,37 @@ ${errorMessages.slice(0, 5).map((e) => `- ${e.slice(0, 100)}`).join("\n")}`);
         toolCalls++;
         if (event.toolName) toolNames.add(event.toolName);
       }
-      if (event.type === "tool_end" && event.toolOutput) {
+      if (event.type === "tool_end") {
         if (currentAgent) {
-          const preview = typeof event.toolOutput === "string" ? event.toolOutput.slice(0, 80) : JSON.stringify(event.toolOutput).slice(0, 80);
-          currentAgent.output.push(`${event.toolName}: ${preview}`);
+          currentAgent.toolCount++;
+          if (event.toolSuccess === false) {
+            const errMsg = typeof event.toolOutput === "string" ? event.toolOutput.slice(0, 100) : `${event.toolName} failed`;
+            currentAgent.errors.push(errMsg);
+          }
+          if (event.toolOutput) {
+            const preview = typeof event.toolOutput === "string" ? event.toolOutput.slice(0, 80) : JSON.stringify(event.toolOutput).slice(0, 80);
+            currentAgent.output.push(`${event.toolName}: ${preview}`);
+          }
         }
       }
       if (event.type === "agent_spawn") {
         currentAgent = {
           type: event.agentType ?? "unknown",
           prompt: event.agentPrompt ?? "",
-          output: []
+          output: [],
+          status: "running",
+          toolCount: 0,
+          filesEdited: [],
+          errors: []
         };
         agentRecords.push(currentAgent);
       }
       if (event.type === "agent_done") {
-        if (currentAgent && event.agentOutput) {
-          currentAgent.output.push(event.agentOutput.slice(0, 200));
+        if (currentAgent) {
+          currentAgent.status = event.toolSuccess === false ? "error" : "success";
+          if (event.agentOutput) {
+            currentAgent.output.push(event.agentOutput.slice(0, 200));
+          }
         }
         currentAgent = null;
       }
@@ -2066,6 +2107,9 @@ ${errorMessages.slice(0, 5).map((e) => `- ${e.slice(0, 100)}`).join("\n")}`);
           fileChanges.push({ path: chunk.filePath, op: chunk.fileOp ?? "M" });
           autoDetectFromFile(chunk.filePath);
           memory.trackFile(chunk.filePath, `${chunk.fileOp ?? "M"} during session`);
+        }
+        if (currentAgent && chunk.filePath) {
+          currentAgent.filesEdited.push(`${chunk.fileOp ?? "M"} ${chunk.filePath}`);
         }
       }
       if (chunk.type === "error") {
@@ -2123,6 +2167,29 @@ ${errorMessages.slice(0, 5).map((e) => `- ${e.slice(0, 100)}`).join("\n")}`);
             content: `Detected: ${[...detectedPatterns].join(", ")}`,
             tags: [...detectedPatterns],
             relevance: 5
+          });
+        }
+      }
+      const allErrors = [
+        ...errorMessages,
+        ...agentRecords.flatMap((a) => a.errors)
+      ];
+      const uniqueErrors = [...new Set(allErrors.map((e) => e.slice(0, 80)))];
+      if (uniqueErrors.length > 0) {
+        const existing = memory.getByType("pattern");
+        const hasLessons = existing.some((e) => e.title === "Error lessons");
+        if (hasLessons) {
+          const entry = existing.find((e) => e.title === "Error lessons");
+          const current = entry.content.split("\n");
+          const combined = [.../* @__PURE__ */ new Set([...current, ...uniqueErrors])].slice(0, 30);
+          memory.update(entry.id, { content: combined.join("\n") });
+        } else {
+          memory.save({
+            type: "pattern",
+            title: "Error lessons",
+            content: uniqueErrors.slice(0, 15).join("\n"),
+            tags: ["errors", "lessons"],
+            relevance: 8
           });
         }
       }

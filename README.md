@@ -1,168 +1,67 @@
 <p align="center">
-  <h1 align="center">Claude Mission Control</h1>
-  <p align="center">
-    <strong>The terminal multiplexer for Claude Code</strong><br>
-    See everything your AI does — agents, thinking, tools, files — in real time.
-  </p>
-  <p align="center">
-    <a href="#quick-start">Quick Start</a> ·
-    <a href="#features">Features</a> ·
-    <a href="#keyboard-shortcuts">Shortcuts</a> ·
-    <a href="#project-memory">Memory</a> ·
-    <a href="#how-it-works">Architecture</a>
-  </p>
-  <p align="center">
-    <img src="https://img.shields.io/badge/tests-300%20passing-brightgreen" alt="300 tests passing">
-    <img src="https://img.shields.io/badge/node-%3E%3D22-blue" alt="Node 22+">
-    <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey" alt="Cross-platform">
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
-    <img src="https://img.shields.io/badge/TUI-no%20framework-orange" alt="No TUI framework">
-  </p>
+  <img src="https://img.shields.io/badge/Claude_Mission_Control-v0.1.0-blue?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHJ4PSI0IiBmaWxsPSIjMEQxMTE3Ii8+PHBhdGggZD0iTTQgOGgxNk00IDE2aDE2TTEyIDRWMjAiIHN0cm9rZT0iIzU4QTZGRiIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+" alt="Mission Control">
+</p>
+
+<h1 align="center">Claude Mission Control</h1>
+
+<p align="center">
+  <strong>X-ray vision for Claude Code.</strong><br>
+  See every agent, every tool call, every file change — in real time.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/tests-276%20passing-brightgreen?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/idle%20CPU-~0%25-brightgreen?style=flat-square" alt="CPU">
+  <img src="https://img.shields.io/badge/memory-~50MB-blue?style=flat-square" alt="Memory">
+  <img src="https://img.shields.io/badge/render-dirty%20flag-blue?style=flat-square" alt="Render">
+  <img src="https://img.shields.io/badge/deps-4%20runtime-lightgrey?style=flat-square" alt="Dependencies">
+  <img src="https://img.shields.io/badge/framework-none-orange?style=flat-square" alt="No framework">
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-Intel%20%2B%20Apple%20Silicon-000?style=flat-square&logo=apple&logoColor=white" alt="macOS">
+  <img src="https://img.shields.io/badge/Linux-Debian%20%7C%20Arch%20%7C%20Fedora-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
+  <img src="https://img.shields.io/badge/Windows-10%2B%20(Terminal)-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
 </p>
 
 ---
 
 ```
- Claude Mission Control  |  ● 2 agents  |  46 tools  |  hooks    1:Think | 2:Tools | 3:Files | 4:Orch | 5:Web
-┌─Claude Code─────────────────────────────────────┐ ┌─Thinking──────────────────────┐
-│                                                  │ │                               │
-│  Welcome back!                                   │ │  ⟳ Herding... [medium] 14:30  │
-│                                                  │ │  ⟳ Bootstrapping...    14:30  │
-│  ● Launching 3 agents to explore this repo...    │ │  ✓ Done (41s)                 │
-│                                                  │ │                               │
-│  Here is my analysis:                            │ │                               │
-│  The project uses a modular architecture with    │ │                               │
-│  15 modules across 3 layers...                   │ │                               │
-│                                                  │ │                               │
-├─Explore: root config────┬─coder: implement───────┤ │                               │
-│  ✓ Read package.json    │  ⟳ Edit src/index.ts   │ │                               │
-│  ✓ Glob **/*.ts         │  ⟳ Write src/helper.ts │ │                               │
-│  ✓ Found 15 modules     │  → Creating module...  │ │                               │
-└─────────────────────────┴────────────────────────┘ └───────────────────────────────┘
- ● passthrough
+ ● Mission Control  |  ● 3 agents  |  45 tools  |  hooks  |  F1=panels q=quit
+┌─ Claude Code ──────────────────────────┬─ Explore: project structure ─────────┐
+│                                        │  ✓ Read package.json                 │
+│  Launching 3 agents to explore...      │  ✓ Glob **/*.ts (42 matches)         │
+│                                        │  ✓ Found 15 modules, 3 layers        │
+│  ● explorer-structure                  ├─ coder: implement helper ────────────┤
+│  ● explorer-src                        │  ⟳ Edit src/index.ts                 │
+│  ● explorer-docs                       │  + src/utils/helper.ts               │
+│                                        │  → Writing module...                 │
+│  Esperando resultados...               ├─ qa: run tests ─────────────────────┤
+│                                        │  ⟳ Bash npm test                     │
+├─ [1:Tools | 2:Files | 3:Orch | 4:Web] ┤  → Running 243 tests...             │
+│  ✓ Read package.json       14:30:45    │                                      │
+│  ✓ Glob **/*.ts            14:30:46    │                                      │
+│  ⟳ Edit src/index.ts       14:30:48    │                                      │
+│ ● passthrough                          │                                      │
+└────────────────────────────────────────┴──────────────────────────────────────┘
 ```
 
-## Why Mission Control?
+## Why?
 
-Claude Code runs in a single terminal. When it spawns agents, reasons through problems, calls tools, or edits files — **everything is interleaved in one stream**. You have to scroll back and piece together what happened.
+Claude Code runs in one terminal. Agents, thinking, tools, files — all mixed together. You scroll back trying to figure out what happened.
 
-Mission Control wraps Claude Code and gives you **X-ray vision** into everything it does:
+**Mission Control wraps Claude Code** and shows you everything in real time:
 
-| Problem | Solution |
-|---|---|
-| Can't see what agents are doing | Each agent gets its own live pane |
-| Thinking is hidden/mixed in output | Dedicated Thinking tab with timestamps |
-| Tool calls flash by unnoticed | Tools tab shows every call with status |
-| File changes are hard to track | Files tab + real-time filesystem watcher |
-| Context lost between sessions | Persistent project memory with error lessons |
-| No idea what happened last session | Auto-generated session reports with agent report cards |
+| Without MC | With MC |
+|:---|:---|
+| Agents invisible in output stream | Each agent gets its own live pane |
+| Tool calls flash by | Tools tab with status + input/output preview |
+| File changes buried in output | Files tab + filesystem watcher |
+| Context lost between sessions | Persistent memory with error lessons |
+| No idea what agents are doing | Agent panes show tool calls + file edits live |
 
-### By the Numbers
-
-| Metric | Value |
-|---|---|
-| Test coverage | **300 tests** across 14 suites |
-| Startup time | **< 1 second** |
-| Memory footprint | **~50-70 MB** |
-| Render rate | **~30 fps** diff-based |
-| Dependencies | **4 runtime** (node-pty, xterm, chokidar, strip-ansi) |
-| Framework | **None** — raw ANSI + custom compositor |
-
-## Features
-
-### Real-Time Agent Visibility
-
-Every sub-agent gets its own pane. See what each one is doing — tool calls, file edits, output — as it happens. Agent panes appear automatically when agents spawn and show completion status.
-
-```
-┌─Explore: frontend──────┬─coder11111: implement──┐
-│  ✓ Read package.json   │  ⟳ Edit src/index.ts   │
-│  ✓ Glob **/*.tsx       │  + src/utils/helper.ts  │
-│  Found 42 components   │  M src/types.ts         │
-│  React + Next.js       │  Running tests...       │
-└────────────────────────┴─────────────────────────┘
-```
-
-### 5-Tab Side Panel
-
-Switch between views with number keys `1`-`5` in panel mode:
-
-| Tab | Key | Shows |
-|---|---|---|
-| **Think** | `1` | Thinking indicators with verb, effort level, duration |
-| **Tools** | `2` | Every tool call with status, input preview, MCP server name |
-| **Files** | `3` | File changes (create/modify/delete) from parser + filesystem watcher |
-| **Orch** | `4` | Agent tree, tool feed, session statistics |
-| **Web** | `5` | Fetch and display web pages as terminal text |
-
-### Smart MCP Tool Display
-
-When Claude Code uses MCP servers, MC auto-switches to the Tools tab and shows rich detail:
-
-```
-⟳ slack:send_message [slack-mcp] 14:30:45
-  → {"channel": "#general", "text": "Deploy complete"}
-✓ slack:send_message [slack-mcp] 14:30:47
-  → Message sent successfully
-
-⟳ browser:navigate [puppeteer-mcp] 14:31:02
-  → {"url": "https://api.example.com/health"}
-✓ browser:navigate [puppeteer-mcp] 14:31:05
-  → 200 OK
-```
-
-### Persistent Project Memory
-
-MC remembers everything about each project — across sessions, automatically:
-
-```
-your-project/.mc/
-├── memory/
-│   ├── entries.json          # Architecture, decisions, tech stack
-│   └── tracked-files.json    # Important files with reasons
-├── sessions/
-│   └── abc123.json           # Full session report
-└── CONTEXT.md                # Auto-injected into Claude on startup
-```
-
-**What it captures:**
-- Tech stack auto-detected from file extensions
-- File change history with operations (A/M/D)
-- Agent report cards with success/fail status
-- Error lessons accumulated across sessions
-- Conversation topics and decisions
-
-### Agent Report Cards
-
-Every session saves a detailed report for each agent:
-
-```
-Agents: 3 total (2 success, 1 failed)
-  #1 Explore [OK] (12 tools)
-     Task: Analyze project architecture
-     Files: M package.json, A src/util.ts
-     Result: Found 15 modules across 3 layers
-  #2 coder11111 [OK] (8 tools)
-     Task: Implement helper module
-     Files: A src/helper.ts, M src/index.ts
-     Result: Module created with 3 exports
-  #3 qa [FAIL] (5 tools)
-     Task: Run test suite
-     Errors: EACCES: permission denied /tmp/test.db
-```
-
-### Error Learning
-
-Errors are accumulated across sessions and injected as context in future sessions, so Claude learns from past mistakes:
-
-```
-Errors to learn from (3):
-- [coder11111] EACCES: permission denied /tmp/test.db
-- [session] TypeError: cannot read property 'map' of undefined
-- [qa] Test timeout: async operation took > 5000ms
-```
-
-## Quick Start
+## Install (any system)
 
 ```bash
 git clone https://github.com/axeliparrea/claude-code-mission-control.git
@@ -170,43 +69,24 @@ cd claude-code-mission-control
 bash setup.sh
 ```
 
-Then from **any project**:
-
-```bash
-cd ~/my-project
-cmc
-```
-
-### Platform-specific setup
+**That's it.** The setup script detects your OS, installs build tools if needed, compiles native modules, builds, and links `cmc` globally.
 
 <details>
-<summary><strong>macOS (Intel + Apple Silicon)</strong></summary>
+<summary><strong>macOS (Intel + Apple Silicon M1/M2/M3/M4)</strong></summary>
 
 ```bash
 bash scripts/setup-mac.sh
 ```
-
-Requires Xcode Command Line Tools (auto-installs if missing).
-Works on both Intel and M1/M2/M3/M4 chips — `node-pty` compiles for arm64 automatically.
-
-If `npm install` fails:
-```bash
-xcode-select --install
-npm rebuild node-pty
-```
+Auto-installs Xcode CLI Tools. Compiles `node-pty` for arm64 on Apple Silicon.
 </details>
 
 <details>
-<summary><strong>Windows</strong></summary>
+<summary><strong>Windows 10/11</strong></summary>
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1
 ```
-
-Requires:
-- Windows 10 v1809+
-- **Windows Terminal** (recommended — CMD.exe has limited ANSI support)
-- Visual Studio Build Tools (`npm install -g windows-build-tools`)
+Requires Windows Terminal (recommended). Auto-installs Visual Studio Build Tools.
 </details>
 
 <details>
@@ -215,151 +95,255 @@ Requires:
 ```bash
 bash scripts/setup-linux.sh
 ```
-
-Auto-detects package manager and installs build tools if needed.
+Auto-detects `apt`/`pacman`/`dnf` and installs `build-essential`/`base-devel`.
 </details>
 
-### Alternative usage
+<details>
+<summary><strong>Manual install</strong></summary>
 
 ```bash
-# Point to a specific project
+npm install
+npm run build
+npm link
+```
+Requires: Node.js 22+, C++ build tools, Python 3
+</details>
+
+## Usage
+
+```bash
+# From any project — just type cmc
+cd ~/my-project
+cmc
+
+# Resume a Claude Code session
+cmc --resume
+
+# Continue a specific conversation
+cmc --continue abc123
+
+# Pass any Claude Code flags
+cmc --model opus
+cmc --verbose
+cmc --allowedTools "Bash,Read,Write"
+
+# Point to a different project
 cmc --cwd ~/another-project
 
-# Without npm link
-node /path/to/claude-code-mission-control/dist/index.js
-
-# Development mode (hot reload)
-cd claude-code-mission-control
-npm run dev
+# Combine flags
+cmc --cwd ~/my-project --model opus --verbose
 ```
 
-## Keyboard Shortcuts
+**Everything after `cmc` passes through to Claude Code.** MC is transparent — Claude doesn't know it's wrapped.
 
-### Passthrough mode (default)
+### Link it globally (use from anywhere)
 
-Everything you type goes directly to Claude Code.
+After install, `cmc` is already linked. If you need to re-link:
+
+```bash
+cd claude-code-mission-control
+npm link
+```
+
+Now `cmc` works from any directory on your system.
+
+### Unlink
+
+```bash
+npm unlink -g claude-mission-control
+```
+
+## Keyboard
 
 | Key | Action |
-|---|---|
-| `Esc` | Enter panel mode |
-| `Ctrl+C` x1 | Sent to Claude Code |
+|:---|:---|
+| **Everything** | Passes through to Claude Code (normal terminal) |
+| `F1` | Toggle panel mode |
 | `Ctrl+C` x2 | Quit Mission Control |
 
-### Panel mode (press Esc)
+### Panel mode (F1)
 
 | Key | Action |
-|---|---|
-| `1`-`5` | Switch right panel tab |
+|:---|:---|
+| `1`-`4` | Switch bottom tab (Tools / Files / Orch / Web) |
 | `Tab` | Cycle focus between panes |
 | `↑` / `↓` | Scroll focused pane |
 | `q` | Quit |
-| `Esc` | Back to passthrough |
+| `F1` | Back to passthrough |
 
-## How It Works
+## Features
+
+### Agent Panes (right column)
+
+When Claude spawns agents, they appear on the right — each with its own live feed:
+
+- Tool calls the agent makes (`✓ Read`, `⟳ Edit`)
+- Files it creates or modifies (`+ src/new.ts`, `M src/index.ts`)
+- Output and results
+- Up to 4 agents visible, stacked vertically
+
+### Bottom Tabs
+
+| Tab | Key | Shows |
+|:---|:---|:---|
+| **Tools** | `1` | Every tool call with status, server name, input/output preview |
+| **Files** | `2` | File changes from parser + filesystem watcher |
+| **Orch** | `3` | Agent tree, tool feed, session stats |
+| **Web** | `4` | Fetch URLs as terminal text |
+
+### MCP Server Visibility
+
+When Claude uses MCP tools, MC shows the server name and data:
+
+```
+⟳ slack:send_message [slack-mcp] 14:30:45
+  → {"channel": "#deploy", "text": "Build complete"}
+✓ slack:send_message [slack-mcp] 14:30:47
+  → Message sent
+```
+
+### Project Memory
+
+MC remembers everything about each project — automatically, across sessions:
+
+```
+your-project/.mc/
+├── memory/
+│   ├── entries.json          # Project info, tech stack, decisions, error lessons
+│   └── tracked-files.json    # Important files
+├── sessions/
+│   └── abc123.json           # Full session report with agent report cards
+└── CONTEXT.md                # Injected into Claude on startup
+```
+
+**Auto-detects on first run:**
+- Project name, description (package.json)
+- Git branch, remote URL
+- Tech stack (TypeScript, Python, Docker, etc.)
+
+**Learns from every session:**
+- What was discussed and decided
+- Which agents succeeded/failed and why
+- File change history
+- Error lessons (accumulated, never duplicated)
+
+### Session Reports
+
+```
+Duration: 3m 12s | Tools: 93 | Files: 5 | Errors: 1
+
+Agents: 3 total (2 success, 1 failed)
+  #1 Explore [OK] (12 tools)
+     Task: Analyze project architecture
+     Result: Found 15 modules across 3 layers
+  #2 coder11111 [OK] (8 tools)
+     Task: Implement helper module
+     Files: A src/helper.ts, M src/index.ts
+  #3 qa [FAIL] (5 tools)
+     Task: Run test suite
+     Errors: EACCES: permission denied /tmp/test.db
+
+Errors to learn from (1):
+- [qa] EACCES: permission denied /tmp/test.db
+```
+
+## Performance
+
+| Metric | Value |
+|:---|:---|
+| Idle CPU | **~0%** (dirty-flag render — only draws when content changes) |
+| Memory | **~50-70 MB** |
+| Startup | **< 1 second** |
+| Allocations per frame | **Zero** (cell reuse, in-place mutation) |
+| Runtime deps | **4** (node-pty, @xterm/headless, chokidar, strip-ansi) |
+| Build size | **~84 KB** (single JS bundle) |
+
+## Responsive Layout
+
+| Screen | Layout |
+|:---|:---|
+| **120+ cols** | Main (left 65%) + Agents (right 35%) + Tabs (bottom) |
+| **60-120 cols** | Main (left 70%) + Agents (right 30%) + Tabs (bottom) |
+| **< 60 cols** | Main only (compact mode) |
+
+Agents stack vertically on the right. Layout recalculates instantly on resize.
+
+## Architecture
 
 ```
 Your terminal
 │
-├── node-pty spawns `claude` in a pseudo-terminal
+├── node-pty spawns `claude` with your flags
 │
 ├── Raw PTY output feeds:
-│   ├── @xterm/headless (full VT100 emulation → main pane)
-│   └── Parser (classifies lines → thinking/agent/tools/files)
-│         └── Routes to agent panes when agents are active
+│   ├── @xterm/headless (full VT100 → main pane)
+│   └── Parser (classifies → agent/tool/file/error → routes to panes)
 │
-├── Hook system (IPC via unix sockets):
-│   ├── MC injects hooks into Claude Code settings on start
-│   ├── Claude Code runs hook-forward.mjs on each tool call
-│   └── Structured data: tool name, agent type, success/error
+├── Hook system (IPC unix sockets):
+│   ├── Injects hooks into Claude settings on start
+│   ├── Claude runs hook-forward.mjs on each tool call
+│   └── Structured data: tool name, agent type, MCP server
 │
-├── chokidar watches project directory → files panel
-│   └── Respects .gitignore patterns
+├── chokidar watches project → file changes (respects .gitignore)
 │
 ├── Project memory (.mc/):
-│   ├── Auto-detects tech stack from file extensions
+│   ├── Auto-detects project info + tech stack
 │   ├── Saves session reports with agent report cards
-│   ├── Accumulates error lessons across sessions
-│   └── Writes CONTEXT.md injected on next startup
+│   ├── Accumulates error lessons
+│   └── Writes CONTEXT.md → Claude reads on startup
 │
-└── Screen buffer renders all panes (~30fps diff-based)
-    Only changed cells are redrawn each frame
+└── Screen buffer (dirty-flag, diff-based, ~0% idle CPU)
 ```
-
-Claude Code doesn't know it's being wrapped. It sees a normal terminal.
-
-## Responsive Layout
-
-| Terminal size | Layout |
-|---|---|
-| **120+ cols** | Full layout: main + agents + tabbed side panel (35%) |
-| **80-120 cols** | Narrow right panel (28%) |
-| **60-80 cols** | Compact right panel (30 cols minimum) |
-| **< 60 cols** | Main pane only, no side panel |
-
-Agent panes get minimum 5 rows. Layout recalculates instantly on resize.
 
 ## Testing
 
 ```bash
-npm test              # 300 unit/integration tests
-npm run test:e2e      # 16 end-to-end tests (headless PTY)
+npm test              # 276 unit/integration tests
+npm run test:e2e      # 16 headless PTY tests
 npm run test:smoke    # 9 module verification tests
 npm run test:all      # Everything
 
-npm run sandbox       # Interactive testing with mock Claude
+npm run sandbox       # Interactive mock Claude
 ```
-
-### Test coverage by module
-
-| Module | Tests | What's tested |
-|---|---|---|
-| Parser | 63 | Line classification, agent detection, thinking, tools, files |
-| Layout | 35 | All states, resize, compact mode, agent panes |
-| Screen | 34 | Cell buffer, diff rendering, resize, ANSI |
-| Text pane | 30 | Ring buffer, scroll, ANSI rendering |
-| ANSI | 39 | Color parsing, attributes, edge cases |
-| Hook server | 10 | IPC socket, event routing, malformed JSON |
-| Hook installer | 9 | Install/uninstall, backup, idempotency |
-| File watcher | 10 | Add/modify/delete, ignore, dedup |
-| Session collector | 41 | Agent reports, errors, files, tech detection |
-| Agent routing | 16 | Spawn formats, lifecycle, hook integration |
-| Integration | 13 | Full pipeline, persistence, hook flow |
 
 ## Tech Stack
 
-| Component | Technology | Purpose |
-|---|---|---|
-| Terminal emulation | @xterm/headless | Full VT100 for main pane |
-| Pseudo-terminal | node-pty | Spawn Claude Code cross-platform |
-| File watching | chokidar | Real-time file change detection |
-| Rendering | Custom compositor | Cell-based diff rendering |
-| IPC | node:net unix sockets | Hook event communication |
-| Build | tsup | Single-file JS bundle |
-| Tests | vitest | 300 tests, ~8s total |
-| Language | TypeScript strict | Full type safety |
+| Component | Technology |
+|:---|:---|
+| Terminal emulation | @xterm/headless |
+| Pseudo-terminal | node-pty |
+| File watching | chokidar |
+| Rendering | Custom compositor (zero-alloc, dirty-flag) |
+| IPC | node:net unix sockets |
+| Build | tsup (single-file ESM bundle) |
+| Tests | vitest |
+| Language | TypeScript strict |
 
-**No TUI framework.** Raw ANSI escape codes + custom terminal compositor.
+**No TUI framework.** Raw ANSI + custom terminal compositor.
 
 ## Requirements
 
 - **Node.js 22+**
-- **Claude Code** installed and in PATH
+- **Claude Code** in PATH (`npm i -g @anthropic-ai/claude-code`)
 - Terminal with 256-color support
-- Minimum 60 columns x 15 rows
+- 60+ columns recommended
 
 ## Contributing
 
 ```bash
-# Development
-npm run dev           # Run with tsx (hot reload)
-npm run typecheck     # Check types
+npm run dev           # Dev mode with tsx
+npm run typecheck     # Type check
 npm test              # Run tests
 npm run sandbox       # Test with mock Claude
-
-# Build
-npm run build         # Compile to dist/
+npm run build         # Build to dist/
 ```
 
 ## License
 
 MIT
+
+---
+
+<p align="center">
+  Built for engineers who need to see what their AI is actually doing.
+</p>

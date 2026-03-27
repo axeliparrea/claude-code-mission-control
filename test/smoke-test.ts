@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   await check('Parser classifies thinking, tools, files, errors', () => {
     const parser = createParser();
     const chunks = parser.feed(
-      '⚡ Thinking...\nTool: Read\nCreated: src/new.ts\nError: something failed\n'
+      '* Thinking... (thinking with medium effort)\nTool: Read\nCreated: src/new.ts\nError: something failed\n'
     );
     return chunks.length === 4
       && chunks[0]!.type === 'thinking'

@@ -165,19 +165,59 @@ Errors to learn from (3):
 ## Quick Start
 
 ```bash
-# Clone and install
 git clone https://github.com/axeliparrea/claude-code-mission-control.git
 cd claude-code-mission-control
-npm install
-npm run build
-npm link
+bash setup.sh
+```
 
-# Now use from ANY project
+Then from **any project**:
+
+```bash
 cd ~/my-project
 cmc
 ```
 
-That's it. Claude Code launches inside Mission Control.
+### Platform-specific setup
+
+<details>
+<summary><strong>macOS (Intel + Apple Silicon)</strong></summary>
+
+```bash
+bash scripts/setup-mac.sh
+```
+
+Requires Xcode Command Line Tools (auto-installs if missing).
+Works on both Intel and M1/M2/M3/M4 chips — `node-pty` compiles for arm64 automatically.
+
+If `npm install` fails:
+```bash
+xcode-select --install
+npm rebuild node-pty
+```
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1
+```
+
+Requires:
+- Windows 10 v1809+
+- **Windows Terminal** (recommended — CMD.exe has limited ANSI support)
+- Visual Studio Build Tools (`npm install -g windows-build-tools`)
+</details>
+
+<details>
+<summary><strong>Linux (Debian/Ubuntu/Arch/Fedora)</strong></summary>
+
+```bash
+bash scripts/setup-linux.sh
+```
+
+Auto-detects package manager and installs build tools if needed.
+</details>
 
 ### Alternative usage
 
@@ -191,24 +231,6 @@ node /path/to/claude-code-mission-control/dist/index.js
 # Development mode (hot reload)
 cd claude-code-mission-control
 npm run dev
-```
-
-### Platform notes
-
-If `node-pty` fails to compile:
-
-```bash
-# macOS
-xcode-select --install && npm rebuild node-pty
-
-# Debian / Ubuntu
-sudo apt install build-essential python3 && npm rebuild node-pty
-
-# Arch Linux
-sudo pacman -S base-devel python && npm rebuild node-pty
-
-# Windows (requires Windows Terminal, Win 10 v1809+)
-npm install -g windows-build-tools && npm rebuild node-pty
 ```
 
 ## Keyboard Shortcuts

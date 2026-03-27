@@ -1,7 +1,7 @@
 /**
- * Automatically collects context during a Mission Control session.
- * Tracks tools used, files changed, agents spawned, and thinking topics.
- * Saves a summary to project memory when the session ends.
+ * Automatically collects meaningful context during a Mission Control session.
+ * Tracks what was asked, what agents did, what files changed, and what was decided.
+ * Saves a useful summary that serves as context for the next session.
  * @module memory/session-collector
  */
 
@@ -13,35 +13,13 @@ import type { ParsedChunk } from '../types.js';
  * Collects session data and saves to project memory on close.
  */
 export interface SessionCollector {
-  /**
-   * Records a hook event.
-   */
   recordHookEvent(event: HookEvent): void;
-
-  /**
-   * Records a parsed PTY chunk.
-   */
   recordChunk(chunk: ParsedChunk): void;
-
-  /**
-   * Records a file change from the watcher.
-   */
   recordFileChange(filePath: string, changeType: 'M' | 'A' | 'D'): void;
-
-  /**
-   * Finalizes the session and saves summary to project memory.
-   */
   finalize(): void;
-
-  /**
-   * Returns current session stats.
-   */
   readonly stats: SessionStats;
 }
 
-/**
- * Live session statistics.
- */
 export interface SessionStats {
   agentsUsed: number;
   toolCalls: number;
@@ -51,17 +29,30 @@ export interface SessionStats {
   duration: number;
 }
 
+interface FileChange {
+  path: string;
+  op: 'M' | 'A' | 'D';
+}
+
+interface AgentRecord {
+  type: string;
+  prompt: string;
+  output: string[];
+}
+
 /**
- * Creates a SessionCollector that records events and saves to memory on close.
- * @param memory - The project memory instance to save to
+ * Creates a SessionCollector that captures real, useful context.
  */
 export function createSessionCollector(memory: ProjectMemory): SessionCollector {
   const startedAt = Date.now();
   const toolNames = new Set<string>();
-  const filesChanged = new Set<string>();
-  const agentTypes = new Set<string>();
-  const thinkingSnippets: string[] = [];
+  const fileChanges: FileChange[] = [];
+  const fileSet = new Set<string>();
+  const agentRecords: AgentRecord[] = [];
+  const conversationLines: string[] = [];
+  const errorMessages: string[] = [];
   const detectedPatterns = new Set<string>();
+  let currentAgent: AgentRecord | null = null;
   let toolCalls = 0;
   let errors = 0;
 
@@ -81,68 +72,148 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
     if (/vite\.config/.test(filePath)) detectedPatterns.add('vite');
   }
 
+  function buildChangelog(): string {
+    const added = fileChanges.filter((f) => f.op === 'A').map((f) => f.path);
+    const modified = fileChanges.filter((f) => f.op === 'M').map((f) => f.path);
+    const deleted = fileChanges.filter((f) => f.op === 'D').map((f) => f.path);
+    const parts: string[] = [];
+    if (added.length > 0) parts.push(`Created: ${added.slice(0, 10).join(', ')}`);
+    if (modified.length > 0) parts.push(`Modified: ${modified.slice(0, 10).join(', ')}`);
+    if (deleted.length > 0) parts.push(`Deleted: ${deleted.slice(0, 5).join(', ')}`);
+    return parts.join('\n') || 'No file changes';
+  }
+
+  function buildAgentSummary(): string {
+    if (agentRecords.length === 0) return '';
+    const lines: string[] = [];
+    for (const agent of agentRecords) {
+      const outputPreview = agent.output.slice(-3).join('; ').slice(0, 150);
+      lines.push(`- ${agent.type}: ${agent.prompt.slice(0, 100)}${outputPreview ? ' → ' + outputPreview : ''}`);
+    }
+    return lines.join('\n');
+  }
+
+  function buildSummary(): string {
+    const duration = Math.floor((Date.now() - startedAt) / 1000);
+    const mins = Math.floor(duration / 60);
+    const secs = duration % 60;
+    const durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+    const sections: string[] = [];
+
+    sections.push(`Duration: ${durationStr}`);
+
+    if (conversationLines.length > 0) {
+      const topics = conversationLines.slice(0, 5).map((l) => l.slice(0, 100));
+      sections.push(`What was discussed:\n${topics.map((t) => `- ${t}`).join('\n')}`);
+    }
+
+    const changelog = buildChangelog();
+    if (changelog !== 'No file changes') {
+      sections.push(`File changes:\n${changelog}`);
+    }
+
+    const agentSummary = buildAgentSummary();
+    if (agentSummary) {
+      sections.push(`Agents used:\n${agentSummary}`);
+    }
+
+    if (toolCalls > 0) {
+      sections.push(`Tools: ${toolCalls} calls (${[...toolNames].slice(0, 8).join(', ')})`);
+    }
+
+    if (errorMessages.length > 0) {
+      sections.push(`Errors:\n${errorMessages.slice(0, 5).map((e) => `- ${e.slice(0, 100)}`).join('\n')}`);
+    }
+
+    return sections.join('\n\n');
+  }
+
   return {
     recordHookEvent(event: HookEvent): void {
       if (event.type === 'tool_start') {
         toolCalls++;
         if (event.toolName) toolNames.add(event.toolName);
       }
+      if (event.type === 'tool_end' && event.toolOutput) {
+        if (currentAgent) {
+          const preview = typeof event.toolOutput === 'string'
+            ? event.toolOutput.slice(0, 80)
+            : JSON.stringify(event.toolOutput).slice(0, 80);
+          currentAgent.output.push(`${event.toolName}: ${preview}`);
+        }
+      }
       if (event.type === 'agent_spawn') {
-        if (event.agentType) agentTypes.add(event.agentType);
+        currentAgent = {
+          type: event.agentType ?? 'unknown',
+          prompt: event.agentPrompt ?? '',
+          output: [],
+        };
+        agentRecords.push(currentAgent);
+      }
+      if (event.type === 'agent_done') {
+        if (currentAgent && event.agentOutput) {
+          currentAgent.output.push(event.agentOutput.slice(0, 200));
+        }
+        currentAgent = null;
       }
     },
 
     recordChunk(chunk: ParsedChunk): void {
-      if (chunk.type === 'thinking') {
-        const cleaned = chunk.clean.replace(/[\r\n]+/g, ' ').trim();
-        const verbMatch = /^\s*[*·•]\s*(\w+)/i.exec(cleaned);
-        if (verbMatch?.[1] && thinkingSnippets.length < 20) {
-          thinkingSnippets.push(verbMatch[1]);
-        }
-      }
       if (chunk.type === 'file' && chunk.filePath) {
-        filesChanged.add(chunk.filePath);
-        autoDetectFromFile(chunk.filePath);
-        memory.trackFile(chunk.filePath, `${chunk.fileOp ?? 'M'} during session`);
+        if (!fileSet.has(chunk.filePath)) {
+          fileSet.add(chunk.filePath);
+          fileChanges.push({ path: chunk.filePath, op: chunk.fileOp ?? 'M' });
+          autoDetectFromFile(chunk.filePath);
+          memory.trackFile(chunk.filePath, `${chunk.fileOp ?? 'M'} during session`);
+        }
       }
       if (chunk.type === 'error') {
         errors++;
+        if (chunk.clean.trim().length > 5) {
+          errorMessages.push(chunk.clean.trim());
+        }
       }
       if (chunk.type === 'mcp' && chunk.toolName) {
         toolCalls++;
         toolNames.add(chunk.toolName);
       }
+      if (chunk.type === 'main') {
+        const clean = chunk.clean.replace(/[\r\n]+/g, ' ').trim();
+        if (clean.length > 20 && !/^\s*[│┌┘└┐╭╮╯╰─]/.test(clean)) {
+          if (conversationLines.length < 30) {
+            conversationLines.push(clean);
+          }
+        }
+      }
+      if (chunk.type === 'agent') {
+        if (chunk.agentName && currentAgent) {
+          currentAgent.type = chunk.agentName;
+        }
+      }
     },
 
     recordFileChange(filePath: string, changeType: 'M' | 'A' | 'D'): void {
-      filesChanged.add(filePath);
-      autoDetectFromFile(filePath);
-      memory.trackFile(filePath, `${changeType} detected by watcher`);
+      if (!fileSet.has(filePath)) {
+        fileSet.add(filePath);
+        fileChanges.push({ path: filePath, op: changeType });
+        autoDetectFromFile(filePath);
+        memory.trackFile(filePath, `${changeType} detected by watcher`);
+      }
     },
 
     finalize(): void {
       const endedAt = Date.now();
-
-      const toolList = [...toolNames].join(', ');
-      const agentList = [...agentTypes].join(', ');
-      const fileList = [...filesChanged].slice(0, 10);
-      const uniqueThinking = [...new Set(thinkingSnippets)];
-      const thinkingTopics = uniqueThinking.slice(0, 5);
-
-      const summaryParts: string[] = [];
-      if (toolCalls > 0) summaryParts.push(`${toolCalls} tool calls (${toolList})`);
-      if (agentTypes.size > 0) summaryParts.push(`agents: ${agentList}`);
-      if (filesChanged.size > 0) summaryParts.push(`${filesChanged.size} files changed`);
-      if (errors > 0) summaryParts.push(`${errors} errors`);
+      const fullSummary = buildSummary();
 
       const summary: Omit<SessionSummary, 'id'> = {
         startedAt,
         endedAt,
-        agentsUsed: agentTypes.size,
+        agentsUsed: agentRecords.length,
         toolCalls,
-        filesChanged: fileList,
-        thinkingTopics,
-        summary: summaryParts.join('; ') || 'short session',
+        filesChanged: fileChanges.map((f) => `${f.op} ${f.path}`).slice(0, 20),
+        thinkingTopics: conversationLines.slice(0, 5),
+        summary: fullSummary,
       };
 
       memory.saveSession(summary);
@@ -164,10 +235,10 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
 
     get stats(): SessionStats {
       return {
-        agentsUsed: agentTypes.size,
+        agentsUsed: agentRecords.length,
         toolCalls,
-        filesChanged: filesChanged.size,
-        thinkingLines: thinkingSnippets.length,
+        filesChanged: fileSet.size,
+        thinkingLines: conversationLines.length,
         errors,
         duration: Date.now() - startedAt,
       };

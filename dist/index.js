@@ -1958,10 +1958,13 @@ function createProjectMemory(projectDir) {
 function createSessionCollector(memory) {
   const startedAt = Date.now();
   const toolNames = /* @__PURE__ */ new Set();
-  const filesChanged = /* @__PURE__ */ new Set();
-  const agentTypes = /* @__PURE__ */ new Set();
-  const thinkingSnippets = [];
+  const fileChanges = [];
+  const fileSet = /* @__PURE__ */ new Set();
+  const agentRecords = [];
+  const conversationLines = [];
+  const errorMessages = [];
   const detectedPatterns = /* @__PURE__ */ new Set();
+  let currentAgent = null;
   let toolCalls = 0;
   let errors = 0;
   function autoDetectFromFile(filePath) {
@@ -1979,62 +1982,135 @@ function createSessionCollector(memory) {
     if (/next\.config/.test(filePath)) detectedPatterns.add("nextjs");
     if (/vite\.config/.test(filePath)) detectedPatterns.add("vite");
   }
+  function buildChangelog() {
+    const added = fileChanges.filter((f) => f.op === "A").map((f) => f.path);
+    const modified = fileChanges.filter((f) => f.op === "M").map((f) => f.path);
+    const deleted = fileChanges.filter((f) => f.op === "D").map((f) => f.path);
+    const parts = [];
+    if (added.length > 0) parts.push(`Created: ${added.slice(0, 10).join(", ")}`);
+    if (modified.length > 0) parts.push(`Modified: ${modified.slice(0, 10).join(", ")}`);
+    if (deleted.length > 0) parts.push(`Deleted: ${deleted.slice(0, 5).join(", ")}`);
+    return parts.join("\n") || "No file changes";
+  }
+  function buildAgentSummary() {
+    if (agentRecords.length === 0) return "";
+    const lines = [];
+    for (const agent of agentRecords) {
+      const outputPreview = agent.output.slice(-3).join("; ").slice(0, 150);
+      lines.push(`- ${agent.type}: ${agent.prompt.slice(0, 100)}${outputPreview ? " \u2192 " + outputPreview : ""}`);
+    }
+    return lines.join("\n");
+  }
+  function buildSummary() {
+    const duration = Math.floor((Date.now() - startedAt) / 1e3);
+    const mins = Math.floor(duration / 60);
+    const secs = duration % 60;
+    const durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    const sections = [];
+    sections.push(`Duration: ${durationStr}`);
+    if (conversationLines.length > 0) {
+      const topics = conversationLines.slice(0, 5).map((l) => l.slice(0, 100));
+      sections.push(`What was discussed:
+${topics.map((t) => `- ${t}`).join("\n")}`);
+    }
+    const changelog = buildChangelog();
+    if (changelog !== "No file changes") {
+      sections.push(`File changes:
+${changelog}`);
+    }
+    const agentSummary = buildAgentSummary();
+    if (agentSummary) {
+      sections.push(`Agents used:
+${agentSummary}`);
+    }
+    if (toolCalls > 0) {
+      sections.push(`Tools: ${toolCalls} calls (${[...toolNames].slice(0, 8).join(", ")})`);
+    }
+    if (errorMessages.length > 0) {
+      sections.push(`Errors:
+${errorMessages.slice(0, 5).map((e) => `- ${e.slice(0, 100)}`).join("\n")}`);
+    }
+    return sections.join("\n\n");
+  }
   return {
     recordHookEvent(event) {
       if (event.type === "tool_start") {
         toolCalls++;
         if (event.toolName) toolNames.add(event.toolName);
       }
+      if (event.type === "tool_end" && event.toolOutput) {
+        if (currentAgent) {
+          const preview = typeof event.toolOutput === "string" ? event.toolOutput.slice(0, 80) : JSON.stringify(event.toolOutput).slice(0, 80);
+          currentAgent.output.push(`${event.toolName}: ${preview}`);
+        }
+      }
       if (event.type === "agent_spawn") {
-        if (event.agentType) agentTypes.add(event.agentType);
+        currentAgent = {
+          type: event.agentType ?? "unknown",
+          prompt: event.agentPrompt ?? "",
+          output: []
+        };
+        agentRecords.push(currentAgent);
+      }
+      if (event.type === "agent_done") {
+        if (currentAgent && event.agentOutput) {
+          currentAgent.output.push(event.agentOutput.slice(0, 200));
+        }
+        currentAgent = null;
       }
     },
     recordChunk(chunk) {
-      if (chunk.type === "thinking") {
-        const cleaned = chunk.clean.replace(/[\r\n]+/g, " ").trim();
-        const verbMatch = /^\s*[*·•]\s*(\w+)/i.exec(cleaned);
-        if (verbMatch?.[1] && thinkingSnippets.length < 20) {
-          thinkingSnippets.push(verbMatch[1]);
-        }
-      }
       if (chunk.type === "file" && chunk.filePath) {
-        filesChanged.add(chunk.filePath);
-        autoDetectFromFile(chunk.filePath);
-        memory.trackFile(chunk.filePath, `${chunk.fileOp ?? "M"} during session`);
+        if (!fileSet.has(chunk.filePath)) {
+          fileSet.add(chunk.filePath);
+          fileChanges.push({ path: chunk.filePath, op: chunk.fileOp ?? "M" });
+          autoDetectFromFile(chunk.filePath);
+          memory.trackFile(chunk.filePath, `${chunk.fileOp ?? "M"} during session`);
+        }
       }
       if (chunk.type === "error") {
         errors++;
+        if (chunk.clean.trim().length > 5) {
+          errorMessages.push(chunk.clean.trim());
+        }
       }
       if (chunk.type === "mcp" && chunk.toolName) {
         toolCalls++;
         toolNames.add(chunk.toolName);
       }
+      if (chunk.type === "main") {
+        const clean = chunk.clean.replace(/[\r\n]+/g, " ").trim();
+        if (clean.length > 20 && !/^\s*[│┌┘└┐╭╮╯╰─]/.test(clean)) {
+          if (conversationLines.length < 30) {
+            conversationLines.push(clean);
+          }
+        }
+      }
+      if (chunk.type === "agent") {
+        if (chunk.agentName && currentAgent) {
+          currentAgent.type = chunk.agentName;
+        }
+      }
     },
     recordFileChange(filePath, changeType) {
-      filesChanged.add(filePath);
-      autoDetectFromFile(filePath);
-      memory.trackFile(filePath, `${changeType} detected by watcher`);
+      if (!fileSet.has(filePath)) {
+        fileSet.add(filePath);
+        fileChanges.push({ path: filePath, op: changeType });
+        autoDetectFromFile(filePath);
+        memory.trackFile(filePath, `${changeType} detected by watcher`);
+      }
     },
     finalize() {
       const endedAt = Date.now();
-      const toolList = [...toolNames].join(", ");
-      const agentList = [...agentTypes].join(", ");
-      const fileList = [...filesChanged].slice(0, 10);
-      const uniqueThinking = [...new Set(thinkingSnippets)];
-      const thinkingTopics = uniqueThinking.slice(0, 5);
-      const summaryParts = [];
-      if (toolCalls > 0) summaryParts.push(`${toolCalls} tool calls (${toolList})`);
-      if (agentTypes.size > 0) summaryParts.push(`agents: ${agentList}`);
-      if (filesChanged.size > 0) summaryParts.push(`${filesChanged.size} files changed`);
-      if (errors > 0) summaryParts.push(`${errors} errors`);
+      const fullSummary = buildSummary();
       const summary = {
         startedAt,
         endedAt,
-        agentsUsed: agentTypes.size,
+        agentsUsed: agentRecords.length,
         toolCalls,
-        filesChanged: fileList,
-        thinkingTopics,
-        summary: summaryParts.join("; ") || "short session"
+        filesChanged: fileChanges.map((f) => `${f.op} ${f.path}`).slice(0, 20),
+        thinkingTopics: conversationLines.slice(0, 5),
+        summary: fullSummary
       };
       memory.saveSession(summary);
       if (detectedPatterns.size > 0) {
@@ -2053,10 +2129,10 @@ function createSessionCollector(memory) {
     },
     get stats() {
       return {
-        agentsUsed: agentTypes.size,
+        agentsUsed: agentRecords.length,
         toolCalls,
-        filesChanged: filesChanged.size,
-        thinkingLines: thinkingSnippets.length,
+        filesChanged: fileSet.size,
+        thinkingLines: conversationLines.length,
         errors,
         duration: Date.now() - startedAt
       };

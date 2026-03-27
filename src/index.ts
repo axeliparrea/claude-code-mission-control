@@ -33,7 +33,7 @@ type TabName = typeof TAB_NAMES[number];
 
 const RENDER_INTERVAL_MS = 33;
 const WINDOWS_RESIZE_POLL_MS = 500;
-const MAX_VISIBLE_AGENT_PANES = 2;
+const MAX_VISIBLE_AGENT_PANES = 4;
 const DOUBLE_CTRLC_MS = 500;
 
 /**
@@ -171,7 +171,7 @@ function formatHookToolLines(event: HookEvent): string[] {
 function layoutStateForAgentCount(count: number): LayoutState {
   if (count === 0) return 'solo';
   if (count === 1) return 'single';
-  return 'dual';
+  return 'dual'; // 'dual' handles 2+ agents with dynamic grid
 }
 
 /**
@@ -529,8 +529,17 @@ async function main(): Promise<void> {
 
     if (chunk.type === 'main') {
       const ap = activeAgentPane();
-      if (ap && chunk.clean.trim().length > 3) {
-        ap.appendLine(chunk.clean);
+      if (ap) {
+        const line = chunk.clean.trim();
+        if (
+          line.length > 10
+          && !/^\s*[*·•]/.test(line)
+          && !/thinking with \w+ effort/i.test(line)
+          && !/^\s*[│┌┘└┐╭╮╯╰─]/.test(line)
+          && !/bypasspermission|shift\+tab|Context\s+\d+%/i.test(line)
+        ) {
+          ap.appendLine(chunk.clean);
+        }
       }
     }
   }

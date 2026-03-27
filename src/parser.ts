@@ -28,10 +28,10 @@ const THINKING_LINE_RE =
   /^\s*[*·•]\s*\w+(?:\.\.\.|ed for \d)/i;
 
 const AGENT_SPAWN_RE =
-  /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)|^\s*(?:Explore|Architect|Plan|coder\d+|qa|deploy|auditor|security|elite|general)\s*\(/i;
+  /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)|^\s*(?:Explore|Architect|Plan|coder\d+|qa|deploy|auditor|security|elite|general)\s*\(|background agents? launched/i;
 
 const AGENT_BACKGROUND_RE =
-  /[Bb]ackgrounded agent|local agents?$/i;
+  /[Bb]ackgrounded agent|local agents?$|^\s*explorer-\w+:|^\s*agent-\w+:/i;
 
 const AGENT_DONE_RE =
   /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent|Done\s*\(\d+ tool/i;

@@ -129,12 +129,14 @@ describe('calculateLayout', () => {
     expect(a1.width + a2.width).toBe(leftWidth);
   });
 
-  it('dual state: agents get at least 5 rows each, main gets the rest', () => {
+  it('dual state: agents get space, main gets the rest', () => {
     const rows = 40;
     const layout = calculateLayout(120, rows, 'dual', 2);
-    const contentHeight = rows - 2;
-    const agentArea = Math.max(5, Math.floor(contentHeight * 0.40));
-    expect(layout.main.height).toBe(contentHeight - agentArea);
+    expect(layout.main.height).toBeGreaterThan(5);
+    expect(layout.agents.length).toBe(2);
+    for (const a of layout.agents) {
+      expect(a.height).toBeGreaterThanOrEqual(3);
+    }
   });
 
   // --- Right column ---

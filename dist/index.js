@@ -754,8 +754,20 @@ function createPtyManager() {
       ptyProcess?.resize(cols, rows);
     },
     kill() {
-      ptyProcess?.kill();
-      ptyProcess = null;
+      if (ptyProcess) {
+        try {
+          const pid = ptyProcess.pid;
+          ptyProcess.kill();
+          if (pid && process.platform !== "win32") {
+            try {
+              process.kill(-pid, "SIGTERM");
+            } catch {
+            }
+          }
+        } catch {
+        }
+        ptyProcess = null;
+      }
     },
     onData(callback) {
       dataCallbacks.push(callback);
@@ -768,8 +780,8 @@ function createPtyManager() {
 
 // src/parser.ts
 var THINKING_LINE_RE = /^\s*[*·•]\s*\w+(?:\.\.\.|ed for \d)/i;
-var AGENT_SPAWN_RE = /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)|^\s*(?:Explore|Architect|Plan|coder\d+|qa|deploy|auditor|security|elite|general)\s*\(/i;
-var AGENT_BACKGROUND_RE = /[Bb]ackgrounded agent|local agents?$/i;
+var AGENT_SPAWN_RE = /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)|^\s*(?:Explore|Architect|Plan|coder\d+|qa|deploy|auditor|security|elite|general)\s*\(|background agents? launched/i;
+var AGENT_BACKGROUND_RE = /[Bb]ackgrounded agent|local agents?$|^\s*explorer-\w+:|^\s*agent-\w+:/i;
 var AGENT_DONE_RE = /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent|Done\s*\(\d+ tool/i;
 var TOOL_USE_RE = /(?:Tool|Using|Calling):\s*(\S+)|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|●\s*(?:Searching|Recalling|Reading|Writing|Editing)|(\w+)__(\w+)\s*\(/i;
 var MCP_TOOL_RE = /(\w[\w-]*)__(\w[\w-]*)|(\w[\w-]*)\.(\w[\w-]*)\s*(?:\(|:)/;
@@ -988,37 +1000,39 @@ function calculateLayout(cols, rows, state, agentCount) {
       width: leftWidth,
       height: mainHeight2
     };
-    const agent12 = {
+    const agent1 = {
       left: 0,
       top: leftContentTop + mainHeight2,
       width: leftWidth,
       height: agentHeight
     };
-    return { header, main: main3, thinking, mcp, files, agents: [agent12], input, rightTab, tabBar };
+    return { header, main: main3, thinking, mcp, files, agents: [agent1], input, rightTab, tabBar };
   }
-  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.4));
+  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.5));
   const mainHeight = leftContentHeight - agentAreaHeight;
-  const agentWidth = Math.floor(leftWidth / 2);
-  const agent2Width = leftWidth - agentWidth;
   const main2 = {
     left: 0,
     top: leftContentTop,
     width: leftWidth,
     height: mainHeight
   };
-  const agent1 = {
-    left: 0,
-    top: leftContentTop + mainHeight,
-    width: agentWidth,
-    height: agentAreaHeight
-  };
-  const agent2 = {
-    left: agentWidth,
-    top: leftContentTop + mainHeight,
-    width: agent2Width,
-    height: agentAreaHeight
-  };
-  return { header, main: main2, thinking, mcp, files, agents: [agent1, agent2], input, rightTab, tabBar };
+  const agentCols = Math.min(agentCount, 2);
+  const agentRows = Math.ceil(agentCount / agentCols);
+  const agentColWidth = Math.floor(leftWidth / agentCols);
+  const agentRowHeight = Math.max(3, Math.floor(agentAreaHeight / agentRows));
+  const agentRects = [];
+  for (let i = 0; i < agentCount; i++) {
+    const col = i % agentCols;
+    const row = Math.floor(i / agentCols);
+    const isLastCol = col === agentCols - 1;
+    agentRects.push({
+      left: col * agentColWidth,
+      top: leftContentTop + mainHeight + row * agentRowHeight,
+      width: isLastCol ? leftWidth - col * agentColWidth : agentColWidth,
+      height: row === agentRows - 1 ? agentAreaHeight - row * agentRowHeight : agentRowHeight
+    });
+  }
+  return { header, main: main2, thinking, mcp, files, agents: agentRects, input, rightTab, tabBar };
 }
 
 // src/hooks/hook-server.ts
@@ -2211,7 +2225,7 @@ ${changelog}`);
 var TAB_NAMES = ["Think", "Tools", "Files", "Orch", "Web"];
 var RENDER_INTERVAL_MS = 33;
 var WINDOWS_RESIZE_POLL_MS = 500;
-var MAX_VISIBLE_AGENT_PANES = 2;
+var MAX_VISIBLE_AGENT_PANES = 4;
 var DOUBLE_CTRLC_MS = 500;
 function enterAlternateScreen() {
   process.stdout.write("\x1B[?1049h");
@@ -2558,8 +2572,11 @@ async function main() {
     }
     if (chunk.type === "main") {
       const ap = activeAgentPane();
-      if (ap && chunk.clean.trim().length > 3) {
-        ap.appendLine(chunk.clean);
+      if (ap) {
+        const line = chunk.clean.trim();
+        if (line.length > 10 && !/^\s*[*·•]/.test(line) && !/thinking with \w+ effort/i.test(line) && !/^\s*[│┌┘└┐╭╮╯╰─]/.test(line) && !/bypasspermission|shift\+tab|Context\s+\d+%/i.test(line)) {
+          ap.appendLine(chunk.clean);
+        }
       }
     }
   }

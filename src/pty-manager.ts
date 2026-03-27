@@ -150,8 +150,16 @@ export function createPtyManager(): PtyManager {
     },
 
     kill(): void {
-      ptyProcess?.kill();
-      ptyProcess = null;
+      if (ptyProcess) {
+        try {
+          const pid = ptyProcess.pid;
+          ptyProcess.kill();
+          if (pid && process.platform !== 'win32') {
+            try { process.kill(-pid, 'SIGTERM'); } catch { }
+          }
+        } catch { }
+        ptyProcess = null;
+      }
     },
 
     onData(callback: DataCallback): void {

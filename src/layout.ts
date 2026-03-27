@@ -196,10 +196,8 @@ export function calculateLayout(
     return { header, main, thinking, mcp, files, agents: [agent1], input, rightTab, tabBar };
   }
 
-  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.40));
+  const agentAreaHeight = Math.max(5, Math.floor(leftContentHeight * 0.50));
   const mainHeight = leftContentHeight - agentAreaHeight;
-  const agentWidth = Math.floor(leftWidth / 2);
-  const agent2Width = leftWidth - agentWidth;
 
   const main: Rect = {
     left: 0,
@@ -208,19 +206,23 @@ export function calculateLayout(
     height: mainHeight,
   };
 
-  const agent1: Rect = {
-    left: 0,
-    top: leftContentTop + mainHeight,
-    width: agentWidth,
-    height: agentAreaHeight,
-  };
+  const agentCols = Math.min(agentCount, 2);
+  const agentRows = Math.ceil(agentCount / agentCols);
+  const agentColWidth = Math.floor(leftWidth / agentCols);
+  const agentRowHeight = Math.max(3, Math.floor(agentAreaHeight / agentRows));
 
-  const agent2: Rect = {
-    left: agentWidth,
-    top: leftContentTop + mainHeight,
-    width: agent2Width,
-    height: agentAreaHeight,
-  };
+  const agentRects: Rect[] = [];
+  for (let i = 0; i < agentCount; i++) {
+    const col = i % agentCols;
+    const row = Math.floor(i / agentCols);
+    const isLastCol = col === agentCols - 1;
+    agentRects.push({
+      left: col * agentColWidth,
+      top: leftContentTop + mainHeight + row * agentRowHeight,
+      width: isLastCol ? leftWidth - col * agentColWidth : agentColWidth,
+      height: row === agentRows - 1 ? agentAreaHeight - row * agentRowHeight : agentRowHeight,
+    });
+  }
 
-  return { header, main, thinking, mcp, files, agents: [agent1, agent2], input, rightTab, tabBar };
+  return { header, main, thinking, mcp, files, agents: agentRects, input, rightTab, tabBar };
 }

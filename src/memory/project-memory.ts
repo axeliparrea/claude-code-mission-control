@@ -170,6 +170,50 @@ export function createProjectMemory(projectDir: string): ProjectMemory {
       ensureDir(sessionsDir);
       entries = readJson<MemoryEntry[]>(entriesFile, []);
       trackedFiles = readJson<Record<string, string[]>>(filesFile, {});
+
+      const hasProjectInfo = entries.some((e) => e.title === 'Project Info');
+      const hasPkg = fs.existsSync(path.join(projectDir, 'package.json'));
+      const hasGit = fs.existsSync(path.join(projectDir, '.git'));
+
+      if (!hasProjectInfo && (hasPkg || hasGit)) {
+        const info: string[] = [];
+        info.push(`Directory: ${projectDir}`);
+        info.push(`Name: ${path.basename(projectDir)}`);
+
+        if (hasPkg) {
+          try {
+            const pkg = readJson<Record<string, unknown>>(path.join(projectDir, 'package.json'), {});
+            if (pkg['name']) info.push(`Package: ${pkg['name']}`);
+            if (pkg['description']) info.push(`Description: ${pkg['description']}`);
+          } catch { }
+        }
+
+        if (hasGit) {
+          try {
+            const gitHead = fs.readFileSync(path.join(projectDir, '.git', 'HEAD'), 'utf8').trim();
+            const branch = gitHead.replace('ref: refs/heads/', '');
+            info.push(`Git branch: ${branch}`);
+            try {
+              const remote = fs.readFileSync(path.join(projectDir, '.git', 'config'), 'utf8');
+              const urlMatch = /url\s*=\s*(.+)/m.exec(remote);
+              if (urlMatch?.[1]) info.push(`Remote: ${urlMatch[1].trim()}`);
+            } catch { }
+          } catch { }
+        }
+
+        const entry: MemoryEntry = {
+          id: generateId(),
+          type: 'architecture',
+          title: 'Project Info',
+          content: info.join('\n'),
+          tags: ['project', 'meta'],
+          relevance: 10,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        entries.push(entry);
+        writeJson(entriesFile, entries);
+      }
     },
 
     save(input: Omit<MemoryEntry, 'id' | 'createdAt' | 'updatedAt'>): MemoryEntry {

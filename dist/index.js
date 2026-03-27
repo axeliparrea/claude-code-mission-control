@@ -1701,6 +1701,48 @@ function createProjectMemory(projectDir) {
       ensureDir(sessionsDir);
       entries = readJson(entriesFile, []);
       trackedFiles = readJson(filesFile, {});
+      const hasProjectInfo = entries.some((e) => e.title === "Project Info");
+      const hasPkg = fs4.existsSync(path4.join(projectDir, "package.json"));
+      const hasGit = fs4.existsSync(path4.join(projectDir, ".git"));
+      if (!hasProjectInfo && (hasPkg || hasGit)) {
+        const info = [];
+        info.push(`Directory: ${projectDir}`);
+        info.push(`Name: ${path4.basename(projectDir)}`);
+        if (hasPkg) {
+          try {
+            const pkg = readJson(path4.join(projectDir, "package.json"), {});
+            if (pkg["name"]) info.push(`Package: ${pkg["name"]}`);
+            if (pkg["description"]) info.push(`Description: ${pkg["description"]}`);
+          } catch {
+          }
+        }
+        if (hasGit) {
+          try {
+            const gitHead = fs4.readFileSync(path4.join(projectDir, ".git", "HEAD"), "utf8").trim();
+            const branch = gitHead.replace("ref: refs/heads/", "");
+            info.push(`Git branch: ${branch}`);
+            try {
+              const remote = fs4.readFileSync(path4.join(projectDir, ".git", "config"), "utf8");
+              const urlMatch = /url\s*=\s*(.+)/m.exec(remote);
+              if (urlMatch?.[1]) info.push(`Remote: ${urlMatch[1].trim()}`);
+            } catch {
+            }
+          } catch {
+          }
+        }
+        const entry = {
+          id: generateId(),
+          type: "architecture",
+          title: "Project Info",
+          content: info.join("\n"),
+          tags: ["project", "meta"],
+          relevance: 10,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        entries.push(entry);
+        writeJson(entriesFile, entries);
+      }
     },
     save(input) {
       const now = Date.now();

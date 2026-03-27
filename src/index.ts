@@ -423,6 +423,20 @@ async function main(): Promise<void> {
   /**
    * Routes a parsed chunk to the appropriate side pane.
    */
+  /**
+   * Returns the pane of the currently active (running) agent, if any.
+   */
+  function activeAgentPane(): TextPane | undefined {
+    for (let i = agentSlotOrder.length - 1; i >= 0; i--) {
+      const id = agentSlotOrder[i]!;
+      const agent = agents.get(id);
+      if (agent && agent.status === 'active') {
+        return agentPanes.get(id);
+      }
+    }
+    return undefined;
+  }
+
   function routeChunk(chunk: ParsedChunk): void {
     sessionCollector.recordChunk(chunk);
 
@@ -479,9 +493,16 @@ async function main(): Promise<void> {
         : `${fg.thinking}${icons.pending}\x1b[0m`;
       const name = chunk.toolName ?? 'tool';
       const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1b[0m` : '';
-      mcpPane.appendLine(`${icon} ${fg.textPrimary}${name}\x1b[0m${server} ${fg.textDim}${time}\x1b[0m`);
+      const toolLine = `${icon} ${name}${server}`;
+
+      mcpPane.appendLine(`${toolLine} ${fg.textDim}${time}\x1b[0m`);
       if (chunk.clean && chunk.clean.length > 20) {
         mcpPane.appendLine(`  ${fg.textDim}${icons.arrow} ${truncate(chunk.clean, 60)}\x1b[0m`);
+      }
+
+      const ap = activeAgentPane();
+      if (ap) {
+        ap.appendLine(`${toolLine}`);
       }
       return;
     }
@@ -489,12 +510,28 @@ async function main(): Promise<void> {
     if (chunk.type === 'file') {
       fileCount += 1;
       filesPane.appendLine(formatFileChange(chunk));
+      const ap = activeAgentPane();
+      if (ap) {
+        const label = chunk.fileOp === 'A' ? '+' : chunk.fileOp === 'D' ? '-' : 'M';
+        ap.appendLine(`${fg.textDim}${label} ${chunk.filePath ?? ''}\x1b[0m`);
+      }
       return;
     }
 
     if (chunk.type === 'error') {
       mcpPane.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1b[0m`);
+      const ap = activeAgentPane();
+      if (ap) {
+        ap.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1b[0m`);
+      }
       return;
+    }
+
+    if (chunk.type === 'main') {
+      const ap = activeAgentPane();
+      if (ap && chunk.clean.trim().length > 3) {
+        ap.appendLine(chunk.clean);
+      }
     }
   }
 

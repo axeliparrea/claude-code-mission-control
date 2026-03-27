@@ -62,9 +62,10 @@ describe('Memory persistence across sessions', () => {
     mem2.load();
 
     const allEntries = mem2.getAll();
-    expect(allEntries).toHaveLength(2);
-    expect(allEntries[0]!.title).toBe('Event-driven architecture');
-    expect(allEntries[1]!.title).toBe('TypeScript strict mode');
+    expect(allEntries.length).toBeGreaterThanOrEqual(2);
+    const titles = allEntries.map((e) => e.title);
+    expect(titles).toContain('Event-driven architecture');
+    expect(titles).toContain('TypeScript strict mode');
 
     const sessions = mem2.getSessions();
     expect(sessions).toHaveLength(1);

@@ -1934,8 +1934,24 @@ function createSessionCollector(memory) {
   const filesChanged = /* @__PURE__ */ new Set();
   const agentTypes = /* @__PURE__ */ new Set();
   const thinkingSnippets = [];
+  const detectedPatterns = /* @__PURE__ */ new Set();
   let toolCalls = 0;
   let errors = 0;
+  function autoDetectFromFile(filePath) {
+    if (/package\.json$/.test(filePath)) detectedPatterns.add("nodejs");
+    if (/tsconfig\.json$/.test(filePath)) detectedPatterns.add("typescript");
+    if (/\.py$/.test(filePath)) detectedPatterns.add("python");
+    if (/\.rs$/.test(filePath)) detectedPatterns.add("rust");
+    if (/\.go$/.test(filePath)) detectedPatterns.add("golang");
+    if (/\.tsx?$/.test(filePath)) detectedPatterns.add("typescript");
+    if (/\.jsx?$/.test(filePath)) detectedPatterns.add("javascript");
+    if (/Dockerfile/.test(filePath)) detectedPatterns.add("docker");
+    if (/\.sql$/.test(filePath)) detectedPatterns.add("sql");
+    if (/\.vue$/.test(filePath)) detectedPatterns.add("vue");
+    if (/\.svelte$/.test(filePath)) detectedPatterns.add("svelte");
+    if (/next\.config/.test(filePath)) detectedPatterns.add("nextjs");
+    if (/vite\.config/.test(filePath)) detectedPatterns.add("vite");
+  }
   return {
     recordHookEvent(event) {
       if (event.type === "tool_start") {
@@ -1954,6 +1970,7 @@ function createSessionCollector(memory) {
       }
       if (chunk.type === "file" && chunk.filePath) {
         filesChanged.add(chunk.filePath);
+        autoDetectFromFile(chunk.filePath);
         memory.trackFile(chunk.filePath, `${chunk.fileOp ?? "M"} during session`);
       }
       if (chunk.type === "error") {
@@ -1966,6 +1983,7 @@ function createSessionCollector(memory) {
     },
     recordFileChange(filePath, changeType) {
       filesChanged.add(filePath);
+      autoDetectFromFile(filePath);
       memory.trackFile(filePath, `${changeType} detected by watcher`);
     },
     finalize() {
@@ -1989,6 +2007,19 @@ function createSessionCollector(memory) {
         summary: summaryParts.join("; ") || "short session"
       };
       memory.saveSession(summary);
+      if (detectedPatterns.size > 0) {
+        const existing = memory.getByType("architecture");
+        const hasTechStack = existing.some((e) => e.title === "Tech Stack");
+        if (!hasTechStack) {
+          memory.save({
+            type: "architecture",
+            title: "Tech Stack",
+            content: `Detected: ${[...detectedPatterns].join(", ")}`,
+            tags: [...detectedPatterns],
+            relevance: 5
+          });
+        }
+      }
     },
     get stats() {
       return {
@@ -2264,6 +2295,16 @@ async function main() {
     agentPanes.set(agentId, pane);
     applyFocus();
   }
+  function activeAgentPane() {
+    for (let i = agentSlotOrder.length - 1; i >= 0; i--) {
+      const id = agentSlotOrder[i];
+      const agent = agents.get(id);
+      if (agent && agent.status === "active") {
+        return agentPanes.get(id);
+      }
+    }
+    return void 0;
+  }
   function routeChunk(chunk) {
     sessionCollector.recordChunk(chunk);
     if (chunk.type === "thinking") {
@@ -2313,20 +2354,40 @@ async function main() {
       const icon = chunk.toolStatus === "success" ? `${fg.success}${icons.success}\x1B[0m` : chunk.toolStatus === "error" ? `${fg.error}${icons.error}\x1B[0m` : `${fg.thinking}${icons.pending}\x1B[0m`;
       const name = chunk.toolName ?? "tool";
       const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1B[0m` : "";
-      mcpPane.appendLine(`${icon} ${fg.textPrimary}${name}\x1B[0m${server} ${fg.textDim}${time}\x1B[0m`);
+      const toolLine = `${icon} ${name}${server}`;
+      mcpPane.appendLine(`${toolLine} ${fg.textDim}${time}\x1B[0m`);
       if (chunk.clean && chunk.clean.length > 20) {
         mcpPane.appendLine(`  ${fg.textDim}${icons.arrow} ${truncate(chunk.clean, 60)}\x1B[0m`);
+      }
+      const ap = activeAgentPane();
+      if (ap) {
+        ap.appendLine(`${toolLine}`);
       }
       return;
     }
     if (chunk.type === "file") {
       fileCount += 1;
       filesPane.appendLine(formatFileChange(chunk));
+      const ap = activeAgentPane();
+      if (ap) {
+        const label = chunk.fileOp === "A" ? "+" : chunk.fileOp === "D" ? "-" : "M";
+        ap.appendLine(`${fg.textDim}${label} ${chunk.filePath ?? ""}\x1B[0m`);
+      }
       return;
     }
     if (chunk.type === "error") {
       mcpPane.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1B[0m`);
+      const ap = activeAgentPane();
+      if (ap) {
+        ap.appendLine(`${fg.error}${icons.error} ${chunk.clean}\x1B[0m`);
+      }
       return;
+    }
+    if (chunk.type === "main") {
+      const ap = activeAgentPane();
+      if (ap && chunk.clean.trim().length > 3) {
+        ap.appendLine(chunk.clean);
+      }
     }
   }
   function routeHookEvent(event) {

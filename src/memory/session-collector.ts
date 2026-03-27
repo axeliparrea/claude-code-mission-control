@@ -61,8 +61,25 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
   const filesChanged = new Set<string>();
   const agentTypes = new Set<string>();
   const thinkingSnippets: string[] = [];
+  const detectedPatterns = new Set<string>();
   let toolCalls = 0;
   let errors = 0;
+
+  function autoDetectFromFile(filePath: string): void {
+    if (/package\.json$/.test(filePath)) detectedPatterns.add('nodejs');
+    if (/tsconfig\.json$/.test(filePath)) detectedPatterns.add('typescript');
+    if (/\.py$/.test(filePath)) detectedPatterns.add('python');
+    if (/\.rs$/.test(filePath)) detectedPatterns.add('rust');
+    if (/\.go$/.test(filePath)) detectedPatterns.add('golang');
+    if (/\.tsx?$/.test(filePath)) detectedPatterns.add('typescript');
+    if (/\.jsx?$/.test(filePath)) detectedPatterns.add('javascript');
+    if (/Dockerfile/.test(filePath)) detectedPatterns.add('docker');
+    if (/\.sql$/.test(filePath)) detectedPatterns.add('sql');
+    if (/\.vue$/.test(filePath)) detectedPatterns.add('vue');
+    if (/\.svelte$/.test(filePath)) detectedPatterns.add('svelte');
+    if (/next\.config/.test(filePath)) detectedPatterns.add('nextjs');
+    if (/vite\.config/.test(filePath)) detectedPatterns.add('vite');
+  }
 
   return {
     recordHookEvent(event: HookEvent): void {
@@ -83,6 +100,7 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
       }
       if (chunk.type === 'file' && chunk.filePath) {
         filesChanged.add(chunk.filePath);
+        autoDetectFromFile(chunk.filePath);
         memory.trackFile(chunk.filePath, `${chunk.fileOp ?? 'M'} during session`);
       }
       if (chunk.type === 'error') {
@@ -96,6 +114,7 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
 
     recordFileChange(filePath: string, changeType: 'M' | 'A' | 'D'): void {
       filesChanged.add(filePath);
+      autoDetectFromFile(filePath);
       memory.trackFile(filePath, `${changeType} detected by watcher`);
     },
 
@@ -124,6 +143,20 @@ export function createSessionCollector(memory: ProjectMemory): SessionCollector 
       };
 
       memory.saveSession(summary);
+
+      if (detectedPatterns.size > 0) {
+        const existing = memory.getByType('architecture');
+        const hasTechStack = existing.some((e) => e.title === 'Tech Stack');
+        if (!hasTechStack) {
+          memory.save({
+            type: 'architecture',
+            title: 'Tech Stack',
+            content: `Detected: ${[...detectedPatterns].join(', ')}`,
+            tags: [...detectedPatterns],
+            relevance: 5,
+          });
+        }
+      }
     },
 
     get stats(): SessionStats {

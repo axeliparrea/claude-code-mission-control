@@ -73,10 +73,10 @@ export class TextPane implements PaneBase {
   appendLine(text: string): void {
     const wasAtBottom = this.isAtBottom();
 
-    this._lines = [...this._lines, text];
+    this._lines.push(text);
 
-    if (this._lines.length > this.maxLines) {
-      this._lines = this._lines.slice(this._lines.length - this.maxLines);
+    while (this._lines.length > this.maxLines) {
+      this._lines.shift();
     }
 
     if (wasAtBottom) {

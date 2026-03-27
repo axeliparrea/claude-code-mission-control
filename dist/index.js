@@ -253,10 +253,15 @@ var ScreenBufferImpl = class {
    */
   clear() {
     for (let r = 0; r < this.rows; r++) {
+      const row = this.cells[r];
+      if (row === void 0) continue;
       for (let c = 0; c < this.cols; c++) {
-        const row = this.cells[r];
-        if (row !== void 0) {
-          row[c] = makeEmptyCell();
+        const cell = row[c];
+        if (cell !== void 0) {
+          cell.char = " ";
+          cell.fg = "";
+          cell.bg = "";
+          cell.attrs = 0;
         }
       }
     }
@@ -402,11 +407,17 @@ var ScreenBufferImpl = class {
     this.prev = this.cells;
     this.cells = tmp;
     for (let r = 0; r < this.rows; r++) {
+      const srcRow = this.prev[r];
+      const dstRow = this.cells[r];
+      if (!srcRow || !dstRow) continue;
       for (let c = 0; c < this.cols; c++) {
-        const src = this.prev[r]?.[c];
-        const dst = this.cells[r];
-        if (src !== void 0 && dst !== void 0) {
-          dst[c] = { ...src };
+        const src = srcRow[c];
+        const dst = dstRow[c];
+        if (src && dst) {
+          dst.char = src.char;
+          dst.fg = src.fg;
+          dst.bg = src.bg;
+          dst.attrs = src.attrs;
         }
       }
     }
@@ -626,9 +637,9 @@ var TextPane = class {
    */
   appendLine(text) {
     const wasAtBottom = this.isAtBottom();
-    this._lines = [...this._lines, text];
-    if (this._lines.length > this.maxLines) {
-      this._lines = this._lines.slice(this._lines.length - this.maxLines);
+    this._lines.push(text);
+    while (this._lines.length > this.maxLines) {
+      this._lines.shift();
     }
     if (wasAtBottom) {
       this._scrollOffset = Math.max(0, this._lines.length - this.contentHeight);
@@ -1097,6 +1108,10 @@ function createHookServer() {
     socket.setEncoding("utf8");
     socket.on("data", (chunk) => {
       buffer += chunk;
+      if (buffer.length > 65536) {
+        socket.destroy();
+        return;
+      }
       const newlineIndex = buffer.indexOf("\n");
       if (newlineIndex === -1) {
         return;
@@ -1351,6 +1366,11 @@ function createFileWatcher() {
   }
   function isDuplicate(dedupKey, now) {
     const last = dedupMap.get(dedupKey);
+    if (dedupMap.size > 500) {
+      for (const [k, t] of dedupMap) {
+        if (now - t > DEDUP_WINDOW_MS * 2) dedupMap.delete(k);
+      }
+    }
     return last !== void 0 && now - last < DEDUP_WINDOW_MS;
   }
   function handleChokidarEvent(eventName, absolutePath) {
@@ -2204,6 +2224,10 @@ async function main() {
   let focusedPaneIndex = 0;
   let toolCount = 0;
   let fileCount = 0;
+  let screenDirty = true;
+  function markDirty() {
+    screenDirty = true;
+  }
   let lastCtrlCTime = 0;
   let renderIntervalId = null;
   let windowsPollId = null;
@@ -2221,6 +2245,7 @@ async function main() {
     panes.forEach((pane, index) => {
       pane.focused = panelMode && index === focusedPaneIndex;
     });
+    markDirty();
   }
   applyFocus();
   function recalculateLayout() {
@@ -2231,6 +2256,7 @@ async function main() {
     for (const tp of tabPanes) {
       tp.rect = layout.rightTab;
     }
+    markDirty();
     layout.agents.forEach((rect, index) => {
       const agentId = agentSlotOrder[index];
       if (agentId) {
@@ -2558,6 +2584,7 @@ async function main() {
   }
   ptyManager.onData((data) => {
     mainPane.write(data);
+    markDirty();
     const chunks = parser.feed(data);
     for (const chunk of chunks) {
       routeChunk(chunk);
@@ -2587,7 +2614,12 @@ ${memoryContext}
   const contentRows = Math.max(1, layout.main.height - 2);
   ptyManager.spawn(contentCols, contentRows, cwd);
   renderFrame();
-  renderIntervalId = setInterval(renderFrame, RENDER_INTERVAL_MS);
+  renderIntervalId = setInterval(() => {
+    if (screenDirty) {
+      screenDirty = false;
+      renderFrame();
+    }
+  }, RENDER_INTERVAL_MS);
 }
 main().catch((err) => {
   leaveAlternateScreen();

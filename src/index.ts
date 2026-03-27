@@ -287,6 +287,11 @@ async function main(): Promise<void> {
   let focusedPaneIndex = 0;
   let toolCount = 0;
   let fileCount = 0;
+  let screenDirty = true;
+
+  function markDirty(): void {
+    screenDirty = true;
+  }
   let lastCtrlCTime = 0;
   let renderIntervalId: ReturnType<typeof setInterval> | null = null;
   let windowsPollId: ReturnType<typeof setInterval> | null = null;
@@ -312,6 +317,7 @@ async function main(): Promise<void> {
     panes.forEach((pane, index) => {
       pane.focused = panelMode && index === focusedPaneIndex;
     });
+    markDirty();
   }
 
   applyFocus();
@@ -326,6 +332,7 @@ async function main(): Promise<void> {
 
     mainPane.resize(layout.main);
     for (const tp of tabPanes) { tp.rect = layout.rightTab; }
+    markDirty();
 
     layout.agents.forEach((rect, index) => {
       const agentId = agentSlotOrder[index];
@@ -713,6 +720,7 @@ async function main(): Promise<void> {
 
   ptyManager.onData((data: string) => {
     mainPane.write(data);
+    markDirty();
     const chunks = parser.feed(data);
     for (const chunk of chunks) {
       routeChunk(chunk);
@@ -742,7 +750,12 @@ async function main(): Promise<void> {
   ptyManager.spawn(contentCols, contentRows, cwd);
 
   renderFrame();
-  renderIntervalId = setInterval(renderFrame, RENDER_INTERVAL_MS);
+  renderIntervalId = setInterval(() => {
+    if (screenDirty) {
+      screenDirty = false;
+      renderFrame();
+    }
+  }, RENDER_INTERVAL_MS);
 }
 
 main().catch((err: unknown) => {

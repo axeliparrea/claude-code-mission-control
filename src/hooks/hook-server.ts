@@ -251,6 +251,10 @@ export function createHookServer(): HookServer {
 
     socket.on('data', (chunk: string) => {
       buffer += chunk;
+      if (buffer.length > 65536) {
+        socket.destroy();
+        return;
+      }
       const newlineIndex = buffer.indexOf('\n');
       if (newlineIndex === -1) {
         return;

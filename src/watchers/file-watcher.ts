@@ -138,6 +138,11 @@ export function createFileWatcher(): FileWatcher {
 
   function isDuplicate(dedupKey: string, now: number): boolean {
     const last = dedupMap.get(dedupKey);
+    if (dedupMap.size > 500) {
+      for (const [k, t] of dedupMap) {
+        if (now - t > DEDUP_WINDOW_MS * 2) dedupMap.delete(k);
+      }
+    }
     return last !== undefined && now - last < DEDUP_WINDOW_MS;
   }
 

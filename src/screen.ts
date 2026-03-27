@@ -86,10 +86,15 @@ export class ScreenBufferImpl implements ScreenBuffer {
    */
   clear(): void {
     for (let r = 0; r < this.rows; r++) {
+      const row = this.cells[r];
+      if (row === undefined) continue;
       for (let c = 0; c < this.cols; c++) {
-        const row = this.cells[r];
-        if (row !== undefined) {
-          row[c] = makeEmptyCell();
+        const cell = row[c];
+        if (cell !== undefined) {
+          cell.char = ' ';
+          cell.fg = '';
+          cell.bg = '';
+          cell.attrs = 0;
         }
       }
     }
@@ -252,11 +257,17 @@ export class ScreenBufferImpl implements ScreenBuffer {
     this.cells = tmp;
 
     for (let r = 0; r < this.rows; r++) {
+      const srcRow = this.prev[r];
+      const dstRow = this.cells[r];
+      if (!srcRow || !dstRow) continue;
       for (let c = 0; c < this.cols; c++) {
-        const src = this.prev[r]?.[c];
-        const dst = this.cells[r];
-        if (src !== undefined && dst !== undefined) {
-          dst[c] = { ...src };
+        const src = srcRow[c];
+        const dst = dstRow[c];
+        if (src && dst) {
+          dst.char = src.char;
+          dst.fg = src.fg;
+          dst.bg = src.bg;
+          dst.attrs = src.attrs;
         }
       }
     }

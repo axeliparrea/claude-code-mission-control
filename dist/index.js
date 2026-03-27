@@ -767,9 +767,10 @@ function createPtyManager() {
 }
 
 // src/parser.ts
-var THINKING_LINE_RE = /^\s*[*·•]\s*(thinking|twisting|bootstrapping|cogitat|herding|mustering|pondering|ruminating|deliberat)/i;
-var AGENT_SPAWN_RE = /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)/i;
-var AGENT_DONE_RE = /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent/i;
+var THINKING_LINE_RE = /^\s*[*·•]\s*\w+(?:\.\.\.|ed for \d)/i;
+var AGENT_SPAWN_RE = /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)|^\s*(?:Explore|Architect|Plan|coder\d+|qa|deploy|auditor|security|elite|general)\s*\(/i;
+var AGENT_BACKGROUND_RE = /[Bb]ackgrounded agent|local agents?$/i;
+var AGENT_DONE_RE = /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent|Done\s*\(\d+ tool/i;
 var TOOL_USE_RE = /(?:Tool|Using|Calling):\s*(\S+)|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|●\s*(?:Searching|Recalling|Reading|Writing|Editing)|(\w+)__(\w+)\s*\(/i;
 var MCP_TOOL_RE = /(\w[\w-]*)__(\w[\w-]*)|(\w[\w-]*)\.(\w[\w-]*)\s*(?:\(|:)/;
 var TOOL_RESULT_RE = /^Searched for \d+|^Read \d+ |^Wrote \d+ |^Edited \d+ |✓\s*\w+\.\w+|✗\s*\w+/i;
@@ -778,6 +779,8 @@ var FILE_EDIT_RE = /(?:Modified|Created|Deleted|Wrote|Write to|Editing|Edited):\
 var ERROR_RE = /^Error:|✗|FAIL(?:ED)?|panic:|fatal:|hook error$/i;
 var UI_CHROME_RE = /^\s*>>|bypasspermission|shift\+tab|Context\s+\d+%|Usage\s+\d+%|resets?\s+in\s+\d+|^\s*\[Sonnet|^\s*\[Opus|^\s*\[Haiku|^\s*\[Claude|ctrl\+o to expand|\(shift\+tab|thinkingwith\w*medium|thinkingwith\w*effort/i;
 function extractAgentName(line) {
+  const parenMatch = /^(\w+)\(([^)]+)\)/i.exec(line.trim());
+  if (parenMatch?.[2]) return `${parenMatch[1]}: ${parenMatch[2].trim()}`;
   const runningMatch = /Running agent:\s*(.+)/i.exec(line);
   if (runningMatch?.[1]) return runningMatch[1].trim();
   const spawnMatch = /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)\s+['""]?(\w[\w\s-]*?)['""]?(?:\s|$)/i.exec(line);
@@ -834,6 +837,10 @@ function classifyLine(line, state) {
     const agentName = extractAgentName(clean);
     state.currentAgentId = agentId;
     return { type: "agent", text: line, clean, agentId, agentName };
+  }
+  if (AGENT_BACKGROUND_RE.test(clean)) {
+    const agentId = state.currentAgentId ?? `agent-${state.agentCounter}`;
+    return { type: "agent", text: line, clean, agentId };
   }
   if (AGENT_DONE_RE.test(clean)) {
     const agentId = state.currentAgentId ?? `agent-${state.agentCounter}`;

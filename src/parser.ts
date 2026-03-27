@@ -25,13 +25,16 @@ interface ParserState {
  * corrupted partial lines in the PTY stream.
  */
 const THINKING_LINE_RE =
-  /^\s*[*·•]\s*(thinking|twisting|bootstrapping|cogitat|herding|mustering|pondering|ruminating|deliberat)/i;
+  /^\s*[*·•]\s*\w+(?:\.\.\.|ed for \d)/i;
 
 const AGENT_SPAWN_RE =
-  /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)/i;
+  /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)|^\s*(?:Explore|Architect|Plan|coder\d+|qa|deploy|auditor|security|elite|general)\s*\(/i;
+
+const AGENT_BACKGROUND_RE =
+  /[Bb]ackgrounded agent|local agents?$/i;
 
 const AGENT_DONE_RE =
-  /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent/i;
+  /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent|Done\s*\(\d+ tool/i;
 
 const TOOL_USE_RE =
   /(?:Tool|Using|Calling):\s*(\S+)|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|●\s*(?:Searching|Recalling|Reading|Writing|Editing)|(\w+)__(\w+)\s*\(/i;
@@ -59,6 +62,9 @@ const UI_CHROME_RE =
   /^\s*>>|bypasspermission|shift\+tab|Context\s+\d+%|Usage\s+\d+%|resets?\s+in\s+\d+|^\s*\[Sonnet|^\s*\[Opus|^\s*\[Haiku|^\s*\[Claude|ctrl\+o to expand|\(shift\+tab|thinkingwith\w*medium|thinkingwith\w*effort/i;
 
 function extractAgentName(line: string): string {
+  const parenMatch = /^(\w+)\(([^)]+)\)/i.exec(line.trim());
+  if (parenMatch?.[2]) return `${parenMatch[1]}: ${parenMatch[2].trim()}`;
+
   const runningMatch = /Running agent:\s*(.+)/i.exec(line);
   if (runningMatch?.[1]) return runningMatch[1].trim();
 
@@ -144,6 +150,11 @@ function classifyLine(line: string, state: ParserState): ParsedChunk {
     const agentName = extractAgentName(clean);
     state.currentAgentId = agentId;
     return { type: 'agent', text: line, clean, agentId, agentName };
+  }
+
+  if (AGENT_BACKGROUND_RE.test(clean)) {
+    const agentId = state.currentAgentId ?? `agent-${state.agentCounter}`;
+    return { type: 'agent', text: line, clean, agentId };
   }
 
   if (AGENT_DONE_RE.test(clean)) {

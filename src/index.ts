@@ -200,7 +200,7 @@ function buildHeaderContent(
   const toolsBadge = ` ${fg.textDim}${toolCount} tools\x1b[0m`;
   const filesBadge = fileCount > 0 ? ` ${fg.textDim}${fileCount} files\x1b[0m` : '';
   const hookBadge = hookConnected ? ` ${fg.success}hooks\x1b[0m` : '';
-  const keybinds = ` ${fg.textDim}esc=scroll q=quit\x1b[0m`;
+  const keybinds = ` ${fg.textDim}F1=panels q=quit\x1b[0m`;
   return ` ${dot}${title} │${agentsBadge} │${toolsBadge}${filesBadge}${hookBadge} │${keybinds}`;
 }
 
@@ -573,7 +573,7 @@ async function main(): Promise<void> {
 
     const inputRow = r - 1;
     if (panelMode) {
-      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane 1-4=tab esc=back\x1b[0m`);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane 1-4=tab F1=back\x1b[0m`);
     } else {
       screen.writeAnsiString(inputRow, 0, c, `${fg.textDim}${icons.dot} passthrough\x1b[0m`);
     }
@@ -600,7 +600,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (key === '\x1b' && data.length === 1) {
+    if (key === '\x1bOP' || key === '\x1b[11~') {
       panelMode = !panelMode;
       if (panelMode) {
         focusedPaneIndex = 0;

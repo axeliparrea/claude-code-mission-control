@@ -2158,7 +2158,7 @@ function buildHeaderContent(agentCount, toolCount, fileCount, hookConnected) {
   const toolsBadge = ` ${fg.textDim}${toolCount} tools\x1B[0m`;
   const filesBadge = fileCount > 0 ? ` ${fg.textDim}${fileCount} files\x1B[0m` : "";
   const hookBadge = hookConnected ? ` ${fg.success}hooks\x1B[0m` : "";
-  const keybinds = ` ${fg.textDim}esc=scroll q=quit\x1B[0m`;
+  const keybinds = ` ${fg.textDim}F1=panels q=quit\x1B[0m`;
   return ` ${dot}${title} \u2502${agentsBadge} \u2502${toolsBadge}${filesBadge}${hookBadge} \u2502${keybinds}`;
 }
 function resolveWorkingDir() {
@@ -2444,7 +2444,7 @@ async function main() {
     }
     const inputRow = r - 1;
     if (panelMode) {
-      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} \u2191\u2193=scroll tab=pane 1-4=tab esc=back\x1B[0m`);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} \u2191\u2193=scroll tab=pane 1-4=tab F1=back\x1B[0m`);
     } else {
       screen.writeAnsiString(inputRow, 0, c, `${fg.textDim}${icons.dot} passthrough\x1B[0m`);
     }
@@ -2462,7 +2462,7 @@ async function main() {
       ptyManager.write(key);
       return;
     }
-    if (key === "\x1B" && data.length === 1) {
+    if (key === "\x1BOP" || key === "\x1B[11~") {
       panelMode = !panelMode;
       if (panelMode) {
         focusedPaneIndex = 0;

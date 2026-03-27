@@ -34,7 +34,10 @@ const AGENT_DONE_RE =
   /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent/i;
 
 const TOOL_USE_RE =
-  /(?:Tool|Using|Calling):\s*(\S+)|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|●\s*(?:Searching|Recalling|Reading|Writing|Editing)/i;
+  /(?:Tool|Using|Calling):\s*(\S+)|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|●\s*(?:Searching|Recalling|Reading|Writing|Editing)|(\w+)__(\w+)\s*\(/i;
+
+const MCP_TOOL_RE =
+  /(\w[\w-]*)__(\w[\w-]*)|(\w[\w-]*)\.(\w[\w-]*)\s*(?:\(|:)/;
 
 const TOOL_RESULT_RE =
   /^Searched for \d+|^Read \d+ |^Wrote \d+ |^Edited \d+ |✓\s*\w+\.\w+|✗\s*\w+/i;
@@ -69,6 +72,13 @@ function extractAgentName(line: string): string {
 }
 
 function extractToolName(line: string): string {
+  const mcpMatch = MCP_TOOL_RE.exec(line);
+  if (mcpMatch) {
+    const server = mcpMatch[1] ?? mcpMatch[3] ?? '';
+    const tool = mcpMatch[2] ?? mcpMatch[4] ?? '';
+    return `${server}:${tool}`;
+  }
+
   const colonMatch = /(?:Tool|Using|Calling):\s*(\S+)/i.exec(line);
   if (colonMatch?.[1]) return colonMatch[1].trim();
 
@@ -84,6 +94,17 @@ function extractToolName(line: string): string {
   if (resultMatch?.[1]) return resultMatch[1].trim();
 
   return 'tool';
+}
+
+/**
+ * Extracts MCP server name from a tool name like "server:tool" or "server__tool".
+ */
+function extractServerName(line: string): string | undefined {
+  const mcpMatch = MCP_TOOL_RE.exec(line);
+  if (mcpMatch) {
+    return mcpMatch[1] ?? mcpMatch[3];
+  }
+  return undefined;
 }
 
 function extractFilePath(line: string): string {
@@ -130,9 +151,10 @@ function classifyLine(line: string, state: ParserState): ParsedChunk {
     return { type: 'agent', text: line, clean, agentId };
   }
 
-  if (TOOL_USE_RE.test(clean) || BASH_CMD_RE.test(clean)) {
+  if (TOOL_USE_RE.test(clean) || BASH_CMD_RE.test(clean) || MCP_TOOL_RE.test(clean)) {
     const toolName = extractToolName(clean);
-    return { type: 'mcp', text: line, clean, toolName, toolStatus: 'pending' };
+    const toolServer = extractServerName(clean);
+    return { type: 'mcp', text: line, clean, toolName, toolServer, toolStatus: 'pending' };
   }
 
   if (TOOL_RESULT_RE.test(clean)) {

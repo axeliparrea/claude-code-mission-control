@@ -99,15 +99,70 @@ function formatFileChange(chunk: ParsedChunk): string {
 }
 
 /**
- * Formats a hook event tool into a displayable string for the MCP pane.
+ * Truncates a string and adds ellipsis if needed.
  */
-function formatHookTool(event: HookEvent): string {
-  const icon = event.type === 'tool_end'
-    ? (event.toolSuccess !== false ? icons.success : icons.error)
-    : icons.pending;
+function truncate(s: string, max: number): string {
+  const clean = s.replace(/[\n\r]+/g, ' ').trim();
+  return clean.length > max ? clean.slice(0, max - 1) + '…' : clean;
+}
+
+/**
+ * Extracts a readable preview from a tool input/output value.
+ */
+function previewValue(val: unknown, max = 60): string {
+  if (val === undefined || val === null) return '';
+  if (typeof val === 'string') return truncate(val, max);
+  try {
+    return truncate(JSON.stringify(val), max);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Formats a hook event into multiple display lines for the MCP pane.
+ * Shows server name, tool input preview, and tool output preview.
+ */
+function formatHookToolLines(event: HookEvent): string[] {
+  const lines: string[] = [];
+  const time = new Date(event.timestamp).toLocaleTimeString('en-US', {
+    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
   const name = event.toolName ?? 'tool';
-  const server = event.serverName ? ` (${event.serverName})` : '';
-  return `${icon} ${name}${server}`;
+  const isMcp = event.serverName && event.serverName.length > 0;
+  const RESET = '\x1b[0m';
+
+  if (event.type === 'tool_start') {
+    const icon = `${fg.thinking}${icons.pending}${RESET}`;
+    const serverBadge = isMcp
+      ? ` ${fg.mcp}[${event.serverName}]${RESET}`
+      : '';
+    lines.push(`${icon} ${fg.textPrimary}${name}${RESET}${serverBadge} ${fg.textDim}${time}${RESET}`);
+
+    const inputPreview = previewValue(event.toolInput);
+    if (inputPreview) {
+      lines.push(`  ${fg.textDim}${icons.arrow} ${inputPreview}${RESET}`);
+    }
+  }
+
+  if (event.type === 'tool_end') {
+    const success = event.toolSuccess !== false;
+    const icon = success
+      ? `${fg.success}${icons.success}${RESET}`
+      : `${fg.error}${icons.error}${RESET}`;
+    const serverBadge = isMcp
+      ? ` ${fg.mcp}[${event.serverName}]${RESET}`
+      : '';
+    lines.push(`${icon} ${fg.textPrimary}${name}${RESET}${serverBadge} ${fg.textDim}${time}${RESET}`);
+
+    const outputPreview = previewValue(event.toolOutput);
+    if (outputPreview) {
+      const color = success ? fg.textDim : fg.error;
+      lines.push(`  ${color}${icons.arrow} ${outputPreview}${RESET}`);
+    }
+  }
+
+  return lines;
 }
 
 /**
@@ -414,7 +469,20 @@ async function main(): Promise<void> {
 
     if (chunk.type === 'mcp') {
       toolCount += 1;
-      mcpPane.appendLine(formatToolCall(chunk));
+      const time = new Date().toLocaleTimeString('en-US', {
+        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+      const icon = chunk.toolStatus === 'success'
+        ? `${fg.success}${icons.success}\x1b[0m`
+        : chunk.toolStatus === 'error'
+        ? `${fg.error}${icons.error}\x1b[0m`
+        : `${fg.thinking}${icons.pending}\x1b[0m`;
+      const name = chunk.toolName ?? 'tool';
+      const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1b[0m` : '';
+      mcpPane.appendLine(`${icon} ${fg.textPrimary}${name}\x1b[0m${server} ${fg.textDim}${time}\x1b[0m`);
+      if (chunk.clean && chunk.clean.length > 20) {
+        mcpPane.appendLine(`  ${fg.textDim}${icons.arrow} ${truncate(chunk.clean, 60)}\x1b[0m`);
+      }
       return;
     }
 
@@ -439,7 +507,13 @@ async function main(): Promise<void> {
 
     if (event.type === 'tool_start' || event.type === 'tool_end') {
       toolCount += 1;
-      mcpPane.appendLine(formatHookTool(event));
+      const lines = formatHookToolLines(event);
+      for (const line of lines) {
+        mcpPane.appendLine(line);
+      }
+      if (event.serverName && activeTab !== 1) {
+        activeTab = 1;
+      }
       return;
     }
 

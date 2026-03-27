@@ -765,7 +765,8 @@ function createPtyManager() {
 var THINKING_LINE_RE = /^\s*[*·•]\s*(thinking|twisting|bootstrapping|cogitat|herding|mustering|pondering|ruminating|deliberat)/i;
 var AGENT_SPAWN_RE = /[Ss]pawn(?:ed|ing)?\s+(?:agent|sub[_-]?agent)|Running agent:|⊞\s*[Ss]pawn|Agent\s+\w+\s+started|Launched? (?:a |new )?(?:agent|sub[_-]?agent)/i;
 var AGENT_DONE_RE = /(?:agent|sub[_-]?agent).*(?:done|complete|finished|returned)|Agent completed|✓.*agent/i;
-var TOOL_USE_RE = /(?:Tool|Using|Calling):\s*(\S+)|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|●\s*(?:Searching|Recalling|Reading|Writing|Editing)/i;
+var TOOL_USE_RE = /(?:Tool|Using|Calling):\s*(\S+)|⏳.*(?:Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b|●\s*(?:Searching|Recalling|Reading|Writing|Editing)|(\w+)__(\w+)\s*\(/i;
+var MCP_TOOL_RE = /(\w[\w-]*)__(\w[\w-]*)|(\w[\w-]*)\.(\w[\w-]*)\s*(?:\(|:)/;
 var TOOL_RESULT_RE = /^Searched for \d+|^Read \d+ |^Wrote \d+ |^Edited \d+ |✓\s*\w+\.\w+|✗\s*\w+/i;
 var BASH_CMD_RE = /^\s*[LR]\s+\$\s+/;
 var FILE_EDIT_RE = /(?:Modified|Created|Deleted|Wrote|Write to|Editing|Edited):\s*(.+)/i;
@@ -781,6 +782,12 @@ function extractAgentName(line) {
   return "Agent";
 }
 function extractToolName(line) {
+  const mcpMatch = MCP_TOOL_RE.exec(line);
+  if (mcpMatch) {
+    const server = mcpMatch[1] ?? mcpMatch[3] ?? "";
+    const tool = mcpMatch[2] ?? mcpMatch[4] ?? "";
+    return `${server}:${tool}`;
+  }
   const colonMatch = /(?:Tool|Using|Calling):\s*(\S+)/i.exec(line);
   if (colonMatch?.[1]) return colonMatch[1].trim();
   const emojiMatch = /⏳.*?(Read|Write|Edit|Bash|Glob|Grep|Agent|WebSearch|WebFetch)\b/.exec(line);
@@ -791,6 +798,13 @@ function extractToolName(line) {
   const resultMatch = /^(Searched|Read|Wrote|Edited)\b/i.exec(line);
   if (resultMatch?.[1]) return resultMatch[1].trim();
   return "tool";
+}
+function extractServerName(line) {
+  const mcpMatch = MCP_TOOL_RE.exec(line);
+  if (mcpMatch) {
+    return mcpMatch[1] ?? mcpMatch[3];
+  }
+  return void 0;
 }
 function extractFilePath(line) {
   const match = /(?:Modified|Created|Deleted|Wrote|Write to|Editing|Edited):\s*(.+)/i.exec(line);
@@ -820,9 +834,10 @@ function classifyLine(line, state) {
     const agentId = state.currentAgentId ?? `agent-${state.agentCounter}`;
     return { type: "agent", text: line, clean, agentId };
   }
-  if (TOOL_USE_RE.test(clean) || BASH_CMD_RE.test(clean)) {
+  if (TOOL_USE_RE.test(clean) || BASH_CMD_RE.test(clean) || MCP_TOOL_RE.test(clean)) {
     const toolName = extractToolName(clean);
-    return { type: "mcp", text: line, clean, toolName, toolStatus: "pending" };
+    const toolServer = extractServerName(clean);
+    return { type: "mcp", text: line, clean, toolName, toolServer, toolStatus: "pending" };
   }
   if (TOOL_RESULT_RE.test(clean)) {
     const isError = /✗/.test(clean);
@@ -2000,23 +2015,57 @@ function termSize() {
     rows: process.stdout.rows ?? 24
   };
 }
-function formatToolCall(chunk) {
-  const icon = chunk.toolStatus === "success" ? icons.success : chunk.toolStatus === "error" ? icons.error : icons.pending;
-  const name = chunk.toolName ?? "tool";
-  const server = chunk.toolServer ? ` (${chunk.toolServer})` : "";
-  return `${icon} ${name}${server}`;
-}
 function formatFileChange(chunk) {
   const opLabel = chunk.fileOp === "A" ? fg.success + "+" : chunk.fileOp === "D" ? fg.error + "-" : fg.main + "M";
   const filePath = chunk.filePath ?? "";
   const reset = "\x1B[0m";
   return `${opLabel}${reset} ${filePath}`;
 }
-function formatHookTool(event) {
-  const icon = event.type === "tool_end" ? event.toolSuccess !== false ? icons.success : icons.error : icons.pending;
+function truncate(s, max) {
+  const clean = s.replace(/[\n\r]+/g, " ").trim();
+  return clean.length > max ? clean.slice(0, max - 1) + "\u2026" : clean;
+}
+function previewValue(val, max = 60) {
+  if (val === void 0 || val === null) return "";
+  if (typeof val === "string") return truncate(val, max);
+  try {
+    return truncate(JSON.stringify(val), max);
+  } catch {
+    return "";
+  }
+}
+function formatHookToolLines(event) {
+  const lines = [];
+  const time = new Date(event.timestamp).toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
   const name = event.toolName ?? "tool";
-  const server = event.serverName ? ` (${event.serverName})` : "";
-  return `${icon} ${name}${server}`;
+  const isMcp = event.serverName && event.serverName.length > 0;
+  const RESET4 = "\x1B[0m";
+  if (event.type === "tool_start") {
+    const icon = `${fg.thinking}${icons.pending}${RESET4}`;
+    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET4}` : "";
+    lines.push(`${icon} ${fg.textPrimary}${name}${RESET4}${serverBadge} ${fg.textDim}${time}${RESET4}`);
+    const inputPreview = previewValue(event.toolInput);
+    if (inputPreview) {
+      lines.push(`  ${fg.textDim}${icons.arrow} ${inputPreview}${RESET4}`);
+    }
+  }
+  if (event.type === "tool_end") {
+    const success = event.toolSuccess !== false;
+    const icon = success ? `${fg.success}${icons.success}${RESET4}` : `${fg.error}${icons.error}${RESET4}`;
+    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET4}` : "";
+    lines.push(`${icon} ${fg.textPrimary}${name}${RESET4}${serverBadge} ${fg.textDim}${time}${RESET4}`);
+    const outputPreview = previewValue(event.toolOutput);
+    if (outputPreview) {
+      const color = success ? fg.textDim : fg.error;
+      lines.push(`  ${color}${icons.arrow} ${outputPreview}${RESET4}`);
+    }
+  }
+  return lines;
 }
 function layoutStateForAgentCount(count) {
   if (count === 0) return "solo";
@@ -2243,7 +2292,19 @@ async function main() {
     }
     if (chunk.type === "mcp") {
       toolCount += 1;
-      mcpPane.appendLine(formatToolCall(chunk));
+      const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+      const icon = chunk.toolStatus === "success" ? `${fg.success}${icons.success}\x1B[0m` : chunk.toolStatus === "error" ? `${fg.error}${icons.error}\x1B[0m` : `${fg.thinking}${icons.pending}\x1B[0m`;
+      const name = chunk.toolName ?? "tool";
+      const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1B[0m` : "";
+      mcpPane.appendLine(`${icon} ${fg.textPrimary}${name}\x1B[0m${server} ${fg.textDim}${time}\x1B[0m`);
+      if (chunk.clean && chunk.clean.length > 20) {
+        mcpPane.appendLine(`  ${fg.textDim}${icons.arrow} ${truncate(chunk.clean, 60)}\x1B[0m`);
+      }
       return;
     }
     if (chunk.type === "file") {
@@ -2261,7 +2322,13 @@ async function main() {
     sessionCollector.recordHookEvent(event);
     if (event.type === "tool_start" || event.type === "tool_end") {
       toolCount += 1;
-      mcpPane.appendLine(formatHookTool(event));
+      const lines = formatHookToolLines(event);
+      for (const line of lines) {
+        mcpPane.appendLine(line);
+      }
+      if (event.serverName && activeTab !== 1) {
+        activeTab = 1;
+      }
       return;
     }
     if (event.type === "agent_spawn") {

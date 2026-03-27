@@ -2139,45 +2139,19 @@ function truncate(s, max) {
   const clean = s.replace(/[\n\r]+/g, " ").trim();
   return clean.length > max ? clean.slice(0, max - 1) + "\u2026" : clean;
 }
-function previewValue(val, max = 60) {
-  if (val === void 0 || val === null) return "";
-  if (typeof val === "string") return truncate(val, max);
-  try {
-    return truncate(JSON.stringify(val), max);
-  } catch {
-    return "";
-  }
-}
 function formatHookToolLines(event) {
   const lines = [];
-  const time = new Date(event.timestamp).toLocaleTimeString("en-US", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-  const name = event.toolName ?? "tool";
+  const name = truncate(event.toolName ?? "tool", 25);
   const isMcp = event.serverName && event.serverName.length > 0;
+  const serverBadge = isMcp ? ` ${fg.mcp}[${truncate(event.serverName, 15)}]\x1B[0m` : "";
   const RESET3 = "\x1B[0m";
   if (event.type === "tool_start") {
-    const icon = `${fg.thinking}${icons.pending}${RESET3}`;
-    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET3}` : "";
-    lines.push(`${icon} ${fg.textPrimary}${name}${RESET3}${serverBadge} ${fg.textDim}${time}${RESET3}`);
-    const inputPreview = previewValue(event.toolInput);
-    if (inputPreview) {
-      lines.push(`  ${fg.textDim}${icons.arrow} ${inputPreview}${RESET3}`);
-    }
+    lines.push(`${fg.thinking}${icons.pending}${RESET3} ${name}${serverBadge}`);
   }
   if (event.type === "tool_end") {
     const success = event.toolSuccess !== false;
-    const icon = success ? `${fg.success}${icons.success}${RESET3}` : `${fg.error}${icons.error}${RESET3}`;
-    const serverBadge = isMcp ? ` ${fg.mcp}[${event.serverName}]${RESET3}` : "";
-    lines.push(`${icon} ${fg.textPrimary}${name}${RESET3}${serverBadge} ${fg.textDim}${time}${RESET3}`);
-    const outputPreview = previewValue(event.toolOutput);
-    if (outputPreview) {
-      const color = success ? fg.textDim : fg.error;
-      lines.push(`  ${color}${icons.arrow} ${outputPreview}${RESET3}`);
-    }
+    const icon = success ? `${fg.success}${icons.success}` : `${fg.error}${icons.error}`;
+    lines.push(`${icon}${RESET3} ${name}${serverBadge}`);
   }
   return lines;
 }

@@ -180,7 +180,7 @@ function buildHeaderContent(
   const toolsBadge = ` ${fg.textDim}${toolCount} tools\x1b[0m`;
   const filesBadge = fileCount > 0 ? ` ${fg.textDim}${fileCount} files\x1b[0m` : '';
   const hookBadge = hookConnected ? ` ${fg.success}hooks\x1b[0m` : '';
-  const keybinds = ` ${fg.textDim}F1=panels q=quit\x1b[0m`;
+  const keybinds = ` ${fg.textDim}F1-4=tabs F5=scroll\x1b[0m`;
   return ` ${dot}${title} │${agentsBadge} │${toolsBadge}${filesBadge}${hookBadge} │${keybinds}`;
 }
 
@@ -537,7 +537,7 @@ async function main(): Promise<void> {
     if (tbr.width > 0) {
       let tabStr = '';
       for (let i = 0; i < TAB_NAMES.length; i++) {
-        const label = `${i + 1}:${TAB_NAMES[i]}`;
+        const label = `F${i + 1}:${TAB_NAMES[i]}`;
         tabStr += i === activeTab
           ? `${fg.main}\x1b[1m ${label} \x1b[0m`
           : `${fg.textDim} ${label} \x1b[0m`;
@@ -553,7 +553,7 @@ async function main(): Promise<void> {
 
     const inputRow = r - 1;
     if (panelMode) {
-      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[PANEL]${fg.textDim} ↑↓=scroll tab=pane 1-4=tab F1=back\x1b[0m`);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[SCROLL]${fg.textDim} ↑↓=scroll tab=pane q=quit F5=back\x1b[0m`);
     } else {
       screen.writeAnsiString(inputRow, 0, c, `${fg.textDim}${icons.dot} passthrough\x1b[0m`);
     }
@@ -580,7 +580,20 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (key === '\x1bOP' || key === '\x1b[11~') {
+    const fKeyMap: Record<string, number> = {
+      '\x1bOP': 0, '\x1b[11~': 0, '\x1b[[A': 0,
+      '\x1bOQ': 1, '\x1b[12~': 1, '\x1b[[B': 1,
+      '\x1bOR': 2, '\x1b[13~': 2, '\x1b[[C': 2,
+      '\x1bOS': 3, '\x1b[14~': 3, '\x1b[[D': 3,
+    };
+    const fTab = fKeyMap[key];
+    if (fTab !== undefined) {
+      activeTab = fTab;
+      markDirty();
+      return;
+    }
+
+    if (key === '\x1b[15~' || key === '\x1b[[E') {
       panelMode = !panelMode;
       if (panelMode) {
         focusedPaneIndex = 0;
@@ -590,10 +603,6 @@ async function main(): Promise<void> {
     }
 
     if (panelMode) {
-      if (key >= '1' && key <= '4') {
-        activeTab = parseInt(key) - 1;
-        return;
-      }
       if (key === 'q') {
         cleanup();
         process.exit(0);
@@ -609,12 +618,14 @@ async function main(): Promise<void> {
       if (key === '\x1b[A') {
         const panes = focusablePanes();
         panes[focusedPaneIndex]?.scrollUp?.();
+        markDirty();
         return;
       }
 
       if (key === '\x1b[B') {
         const panes = focusablePanes();
         panes[focusedPaneIndex]?.scrollDown?.();
+        markDirty();
         return;
       }
 

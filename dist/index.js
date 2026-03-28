@@ -944,7 +944,7 @@ function calculateLayout(cols, rows, state, agentCount) {
   }
   const contentTop = 1;
   const tabBarHeight = 1;
-  const tabContentHeight = Math.max(3, Math.floor(rows * 0.2));
+  const tabContentHeight = 5;
   const tabTotalHeight = tabBarHeight + tabContentHeight;
   const tabBarRect = { left: 0, top: rows - 1 - tabContentHeight - tabBarHeight, width: cols, height: 1 };
   const tabContentRect = { left: 0, top: rows - 1 - tabContentHeight, width: cols, height: tabContentHeight };
@@ -2349,8 +2349,8 @@ async function main() {
     if (chunk.type === "mcp") {
       toolCount += 1;
       const icon = chunk.toolStatus === "success" ? `${fg.success}${icons.success}\x1B[0m` : chunk.toolStatus === "error" ? `${fg.error}${icons.error}\x1B[0m` : `${fg.thinking}${icons.pending}\x1B[0m`;
-      const name = chunk.toolName ?? "tool";
-      const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1B[0m` : "";
+      const name = truncate(chunk.toolName ?? "tool", 25);
+      const server = chunk.toolServer ? ` ${fg.mcp}[${truncate(chunk.toolServer, 15)}]\x1B[0m` : "";
       const toolLine = `${icon} ${name}${server}`;
       toolsPane.appendLine(toolLine);
       const ap = activeAgentPane();

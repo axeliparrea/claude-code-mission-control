@@ -417,8 +417,8 @@ async function main(): Promise<void> {
         : chunk.toolStatus === 'error'
         ? `${fg.error}${icons.error}\x1b[0m`
         : `${fg.thinking}${icons.pending}\x1b[0m`;
-      const name = chunk.toolName ?? 'tool';
-      const server = chunk.toolServer ? ` ${fg.mcp}[${chunk.toolServer}]\x1b[0m` : '';
+      const name = truncate(chunk.toolName ?? 'tool', 25);
+      const server = chunk.toolServer ? ` ${fg.mcp}[${truncate(chunk.toolServer, 15)}]\x1b[0m` : '';
       const toolLine = `${icon} ${name}${server}`;
       toolsPane.appendLine(toolLine);
       const ap = activeAgentPane();

@@ -133,9 +133,10 @@ export class TerminalPane implements PaneBase {
     const termRows = Math.max(1, this.rect.height - 2);
     const originRow = this.rect.top + 1;
     const originCol = this.rect.left + 1;
+    const viewportBase = buffer.viewportY;
 
     for (let y = 0; y < termRows; y++) {
-      const line = buffer.getLine(y);
+      const line = buffer.getLine(viewportBase + y);
       if (line === undefined) continue;
 
       for (let x = 0; x < termCols; x++) {

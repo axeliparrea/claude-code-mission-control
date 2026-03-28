@@ -57,7 +57,7 @@ export function calculateLayout(
 
   const contentTop = 1;
   const tabBarHeight = 1;
-  const tabContentHeight = 5;
+  const tabContentHeight = 3;
   const tabTotalHeight = tabBarHeight + tabContentHeight;
 
   const tabBarRect: Rect = { left: 0, top: rows - 1 - tabContentHeight - tabBarHeight, width: cols, height: 1 };

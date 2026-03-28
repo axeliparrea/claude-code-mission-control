@@ -546,8 +546,9 @@ var TerminalPane = class {
     const termRows = Math.max(1, this.rect.height - 2);
     const originRow = this.rect.top + 1;
     const originCol = this.rect.left + 1;
+    const viewportBase = buffer.viewportY;
     for (let y = 0; y < termRows; y++) {
-      const line = buffer.getLine(y);
+      const line = buffer.getLine(viewportBase + y);
       if (line === void 0) continue;
       for (let x = 0; x < termCols; x++) {
         const cell = line.getCell(x);
@@ -944,7 +945,7 @@ function calculateLayout(cols, rows, state, agentCount) {
   }
   const contentTop = 1;
   const tabBarHeight = 1;
-  const tabContentHeight = 5;
+  const tabContentHeight = 3;
   const tabTotalHeight = tabBarHeight + tabContentHeight;
   const tabBarRect = { left: 0, top: rows - 1 - tabContentHeight - tabBarHeight, width: cols, height: 1 };
   const tabContentRect = { left: 0, top: rows - 1 - tabContentHeight, width: cols, height: tabContentHeight };

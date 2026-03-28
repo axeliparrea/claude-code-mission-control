@@ -35,6 +35,7 @@ export function calculateLayout(
   rows: number,
   state: LayoutState,
   agentCount: number,
+  tabExpanded = true,
 ): LayoutResult {
   const isCompact =
     state === 'compact' ||
@@ -57,7 +58,8 @@ export function calculateLayout(
 
   const contentTop = 1;
   const tabBarHeight = 1;
-  const tabContentHeight = Math.max(6, Math.floor(rows * 0.30));
+  const tabRatio = tabExpanded ? 0.45 : 0.20;
+  const tabContentHeight = Math.max(3, Math.floor(rows * tabRatio));
   const tabTotalHeight = tabBarHeight + tabContentHeight;
 
   const tabBarRect: Rect = { left: 0, top: rows - 1 - tabContentHeight - tabBarHeight, width: cols, height: 1 };

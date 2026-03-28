@@ -925,7 +925,7 @@ var RIGHT_COL_MIN = 30;
 function zeroRect() {
   return { left: 0, top: 0, width: 0, height: 0 };
 }
-function calculateLayout(cols, rows, state, agentCount) {
+function calculateLayout(cols, rows, state, agentCount, tabExpanded = true) {
   const isCompact = state === "compact" || cols < COMPACT_COLS_THRESHOLD || rows < COMPACT_ROWS_THRESHOLD;
   const header = { left: 0, top: 0, width: cols, height: 1 };
   const input = { left: 0, top: rows - 1, width: cols, height: 1 };
@@ -945,7 +945,8 @@ function calculateLayout(cols, rows, state, agentCount) {
   }
   const contentTop = 1;
   const tabBarHeight = 1;
-  const tabContentHeight = Math.max(6, Math.floor(rows * 0.3));
+  const tabRatio = tabExpanded ? 0.45 : 0.2;
+  const tabContentHeight = Math.max(3, Math.floor(rows * tabRatio));
   const tabTotalHeight = tabBarHeight + tabContentHeight;
   const tabBarRect = { left: 0, top: rows - 1 - tabContentHeight - tabBarHeight, width: cols, height: 1 };
   const tabContentRect = { left: 0, top: rows - 1 - tabContentHeight, width: cols, height: tabContentHeight };
@@ -2220,7 +2221,8 @@ async function main() {
     hookConnected = false;
   }
   let layoutState = "solo";
-  let layout = calculateLayout(cols, rows, layoutState, 0);
+  let tabExpanded = true;
+  let layout = calculateLayout(cols, rows, layoutState, 0, tabExpanded);
   const mainPane = createTerminalPane(
     "main",
     "Claude Code",
@@ -2268,7 +2270,7 @@ async function main() {
   function recalculateLayout() {
     const { cols: c, rows: r } = termSize();
     screen.resize(c, r);
-    layout = calculateLayout(c, r, layoutState, agentSlotOrder.length);
+    layout = calculateLayout(c, r, layoutState, agentSlotOrder.length, tabExpanded);
     mainPane.resize(layout.main);
     for (const tp of tabPanes) {
       tp.rect = layout.rightTab;
@@ -2469,6 +2471,13 @@ async function main() {
   }
   function handleKeyInput(data) {
     const key = data.toString("utf8");
+    if (key === "") {
+      tabExpanded = !tabExpanded;
+      recalculateLayout();
+      ptyManager.write(key);
+      renderFrame();
+      return;
+    }
     if (key === "") {
       const now = Date.now();
       if (now - lastCtrlCTime < DOUBLE_CTRLC_MS) {

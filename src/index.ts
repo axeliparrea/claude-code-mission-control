@@ -241,7 +241,8 @@ async function main(): Promise<void> {
   }
 
   let layoutState: LayoutState = 'solo';
-  let layout = calculateLayout(cols, rows, layoutState, 0);
+  let tabExpanded = true;
+  let layout = calculateLayout(cols, rows, layoutState, 0, tabExpanded);
 
   const mainPane: TerminalPane = createTerminalPane(
     'main',
@@ -308,7 +309,7 @@ async function main(): Promise<void> {
   function recalculateLayout(): void {
     const { cols: c, rows: r } = termSize();
     screen.resize(c, r);
-    layout = calculateLayout(c, r, layoutState, agentSlotOrder.length);
+    layout = calculateLayout(c, r, layoutState, agentSlotOrder.length, tabExpanded);
 
     mainPane.resize(layout.main);
     for (const tp of tabPanes) { tp.rect = layout.rightTab; }
@@ -568,6 +569,14 @@ async function main(): Promise<void> {
    */
   function handleKeyInput(data: Buffer): void {
     const key = data.toString('utf8');
+
+    if (key === '\x0f') {
+      tabExpanded = !tabExpanded;
+      recalculateLayout();
+      ptyManager.write(key);
+      renderFrame();
+      return;
+    }
 
     if (key === '\x03') {
       const now = Date.now();

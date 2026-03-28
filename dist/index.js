@@ -2174,7 +2174,7 @@ function buildHeaderContent(agentCount, toolCount, fileCount, hookConnected) {
   const toolsBadge = ` ${fg.textDim}${toolCount} tools\x1B[0m`;
   const filesBadge = fileCount > 0 ? ` ${fg.textDim}${fileCount} files\x1B[0m` : "";
   const hookBadge = hookConnected ? ` ${fg.success}hooks\x1B[0m` : "";
-  const keybinds = ` ${fg.textDim}F1-4=tabs F5=scroll\x1B[0m`;
+  const keybinds = ` ${fg.textDim}F1=panels\x1B[0m`;
   return ` ${dot}${title} \u2502${agentsBadge} \u2502${toolsBadge}${filesBadge}${hookBadge} \u2502${keybinds}`;
 }
 function resolveWorkingDir() {
@@ -2448,7 +2448,7 @@ async function main() {
     if (tbr.width > 0) {
       let tabStr = "";
       for (let i = 0; i < TAB_NAMES.length; i++) {
-        const label = `F${i + 1}:${TAB_NAMES[i]}`;
+        const label = `${i + 1}:${TAB_NAMES[i]}`;
         tabStr += i === activeTab ? `${fg.main}\x1B[1m ${label} \x1B[0m` : `${fg.textDim} ${label} \x1B[0m`;
         if (i < TAB_NAMES.length - 1) tabStr += `${fg.textDim}|`;
       }
@@ -2460,7 +2460,7 @@ async function main() {
     }
     const inputRow = r - 1;
     if (panelMode) {
-      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[SCROLL]${fg.textDim} \u2191\u2193=scroll tab=pane q=quit F5=back\x1B[0m`);
+      screen.writeAnsiString(inputRow, 0, c, `${fg.main}[F1 PANEL]${fg.textDim} 1-4=tab \u2191\u2193=scroll tab=pane q=quit F1=back\x1B[0m`);
     } else {
       screen.writeAnsiString(inputRow, 0, c, `${fg.textDim}${icons.dot} passthrough\x1B[0m`);
     }
@@ -2478,27 +2478,7 @@ async function main() {
       ptyManager.write(key);
       return;
     }
-    const fKeyMap = {
-      "\x1BOP": 0,
-      "\x1B[11~": 0,
-      "\x1B[[A": 0,
-      "\x1BOQ": 1,
-      "\x1B[12~": 1,
-      "\x1B[[B": 1,
-      "\x1BOR": 2,
-      "\x1B[13~": 2,
-      "\x1B[[C": 2,
-      "\x1BOS": 3,
-      "\x1B[14~": 3,
-      "\x1B[[D": 3
-    };
-    const fTab = fKeyMap[key];
-    if (fTab !== void 0) {
-      activeTab = fTab;
-      markDirty();
-      return;
-    }
-    if (key === "\x1B[15~" || key === "\x1B[[E") {
+    if (key === "\x1BOP" || key === "\x1B[11~" || key === "\x1B[[A") {
       panelMode = !panelMode;
       if (panelMode) {
         focusedPaneIndex = 0;
@@ -2507,6 +2487,11 @@ async function main() {
       return;
     }
     if (panelMode) {
+      if (key >= "1" && key <= "4") {
+        activeTab = parseInt(key) - 1;
+        markDirty();
+        return;
+      }
       if (key === "q") {
         cleanup();
         process.exit(0);

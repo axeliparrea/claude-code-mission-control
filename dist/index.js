@@ -945,7 +945,7 @@ function calculateLayout(cols, rows, state, agentCount) {
   }
   const contentTop = 1;
   const tabBarHeight = 1;
-  const tabContentHeight = 3;
+  const tabContentHeight = Math.max(6, Math.floor(rows * 0.3));
   const tabTotalHeight = tabBarHeight + tabContentHeight;
   const tabBarRect = { left: 0, top: rows - 1 - tabContentHeight - tabBarHeight, width: cols, height: 1 };
   const tabContentRect = { left: 0, top: rows - 1 - tabContentHeight, width: cols, height: tabContentHeight };

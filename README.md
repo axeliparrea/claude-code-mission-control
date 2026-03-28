@@ -27,25 +27,29 @@
 
 ---
 
-```
- ● Mission Control  |  ● 3 agents  |  45 tools  |  hooks  |  F1=panels q=quit
-┌─ Claude Code ──────────────────────────┬─ Explore: project structure ─────────┐
-│                                        │  ✓ Read package.json                 │
-│  Launching 3 agents to explore...      │  ✓ Glob **/*.ts (42 matches)         │
-│                                        │  ✓ Found 15 modules, 3 layers        │
-│  ● explorer-structure                  ├─ coder: implement helper ────────────┤
-│  ● explorer-src                        │  ⟳ Edit src/index.ts                 │
-│  ● explorer-docs                       │  + src/utils/helper.ts               │
-│                                        │  → Writing module...                 │
-│  Esperando resultados...               ├─ qa: run tests ─────────────────────┤
-│                                        │  ⟳ Bash npm test                     │
-├─ [1:Tools | 2:Files | 3:Orch | 4:Web] ┤  → Running 243 tests...             │
-│  ✓ Read package.json       14:30:45    │                                      │
-│  ✓ Glob **/*.ts            14:30:46    │                                      │
-│  ⟳ Edit src/index.ts       14:30:48    │                                      │
-│ ● passthrough                          │                                      │
-└────────────────────────────────────────┴──────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/images/mc-agents-orch.png" alt="Agents + Orchestrator" width="100%">
+</p>
+
+<p align="center">
+  <em>4 agents running in parallel — each with live tool calls. Orchestrator shows agent tree + session stats.</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/mc-main.png" alt="Main view with agents and code review" width="100%">
+</p>
+
+<p align="center">
+  <em>Explore and code-reviewer agents working simultaneously. Agent panes on the right show what each one is doing.</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/mc-tools.png" alt="Detailed tool calls and file reads" width="100%">
+</p>
+
+<p align="center">
+  <em>Deep visibility: every Read, Grep, Bash command visible. 4 agent panes tracking parallel work across the codebase.</em>
+</p>
 
 ## Why?
 

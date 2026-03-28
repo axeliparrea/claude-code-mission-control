@@ -2484,12 +2484,13 @@ async function main() {
         focusedPaneIndex = 0;
       }
       applyFocus();
+      renderFrame();
       return;
     }
     if (panelMode) {
       if (key >= "1" && key <= "4") {
         activeTab = parseInt(key) - 1;
-        markDirty();
+        renderFrame();
         return;
       }
       if (key === "q") {
@@ -2500,18 +2501,19 @@ async function main() {
         const panes = focusablePanes();
         focusedPaneIndex = (focusedPaneIndex + 1) % panes.length;
         applyFocus();
+        renderFrame();
         return;
       }
       if (key === "\x1B[A") {
         const panes = focusablePanes();
         panes[focusedPaneIndex]?.scrollUp?.();
-        markDirty();
+        renderFrame();
         return;
       }
       if (key === "\x1B[B") {
         const panes = focusablePanes();
         panes[focusedPaneIndex]?.scrollDown?.();
-        markDirty();
+        renderFrame();
         return;
       }
       return;
